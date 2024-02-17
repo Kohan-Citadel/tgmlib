@@ -1,0 +1,81 @@
+FORM chunk
+	4 bytes big-endian: size of file not including FORM
+	TGSV (time gate save)
+HEDR chunk
+	standard 4byte chunk length
+	followed by 8 bytes
+GVER chunk
+	standard 4byte chunk length
+	Compatible game versions
+	Switched for settings toggles (which zones to display, etc) However, they don't seem to do anything. When zeroed, the map will load and the game will repopulate it when saved.
+EDTR chunk:
+	standard 4byte chunk length
+	0x60 for KAG maps, 0x50 for KIS, followed by 0x000000
+	1 byte storing name length
+	name_length bytes containing the map name. 0x85 is the red circle, 0x86 is the crossed swords, 0x8B is sword & shield
+	1 byte storing description length
+	description
+MPST chunk:
+	short, but significant differences after making any changes
+
+MGRD chunk:
+	Very large, appears to contain the data for rendering the minimap
+
+RADR chunk:
+	only contains 4 bytes of data, even in save-games
+
+FTRS chunk:
+	Contains a list of "features", with each entry being 0x10 bytes long, and padded with 0x092F. The first byte is 0x10, likely signifying the length.
+
+FIDX chunk:
+	very short
+
+CMPG chunk:
+	Seems to always be 0x 0000 0000 0000 0000
+
+TECH chunk:
+	Contains the known techs of each player.
+
+GAME chunk:
+
+TYPE chunk
+
+
+In the object index, each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
+
+Terrain is 0x0002
+Lairs:
+	DRAGON_LAIR:		0x0303
+	DRAGON_LAIR ruin:	0x0202 (potentially all ruined structures: confirmed)
+Units:
+	Spellcaster:	0x0101
+	Regular:		0x0001
+	
+Corpses are 0x0102
+Heroes are 0x0201
+Hero Corpses are 0x0402
+
+Effects:
+	Dragon_Breath:	0x0705
+
+HROS chunk
+first 4 bytes are a big-endian chunk length, starting at the next byte
+There are 5 more bytes before the individual hero entries start
+Each hero entry consists of their INI filename, followed by 27 bytes
+
+PLRS chunk
+first 4 bytes are a big-endian chunk length, starting at the next byte
+Contains sections for each player slot, as well as independent
+Each player is 4597 bytes long, and starts with the player name, if one is assigned. Otherwise it will be Player N
+
+
+OBJS: objects on the map
+OIDX
+TRGS: game triggers
+SAIP: 
+SAIM
+TRTY
+QLOG
+DLIS
+ONMS
+MLOG

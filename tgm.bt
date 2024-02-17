@@ -1,0 +1,93 @@
+//------------------------------------------------
+//--- 010 Editor v14.0 Binary Template
+//
+//      File: 
+//   Authors: 
+//   Version: 
+//   Purpose: 
+//  Category: 
+// File Mask: 
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+typedef struct {
+    ubyte is_active;  // 0x01 for active
+    char padding[3];
+    ubyte name_len;
+    char player_name[name_len];
+    char unknown[4];  // Seems to always be null
+    uint32 team;  // 0-indexed, will be 0xFFFFFFFF if set to 'custom'
+    ubyte SAIe_len;
+    char SAI_easy[SAIe_len];
+    ubyte SAIm_len;
+    char SAI_medium[SAIm_len];
+    ubyte SAIh_len;
+    char SAI_hard[SAIh_len];
+} PLYR_PROF <optimize=false>;
+
+// represents a single technology in a player section in the TECH chunk
+typedef struct {
+    uint32 name_len;
+    char tech_name[name_len];
+} TECHNOLOGY <optimize=false>;
+
+// represents a player's technologies in the TECH chunk
+typedef struct {
+    uint32 player_number;  // This is 0-indexed
+    uint32 num_techs;  // Number of known technologies
+    TECHNOLOGY known_techs[num_techs];
+} PLYR_TECH <optimize=false>;
+    
+struct FORM_CHUNK {
+    char chunk_name[4];  // Always FORM
+    BigEndian();
+    int32 length;  //length in bytes from start of HEDR to end of file
+    LittleEndian();
+    char file_type[4];  // TGSV for .TGM
+} FORM;
+
+struct HEDR_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char unknown[8]; // Seems to be 0400 0300 across maps
+} HEDR;
+
+struct GVER_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char unknown[8];  // Seems to always be 0x 0_00 0000 0401 0000
+    char game_version[12];
+    FSeek(FindFirst("EDTR", true, false));  // Skips ahead to the next chunk
+} GVER;
+
+struct EDTR_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char unknown[4];  // 0x0600 0000 for KAG, 0x0500 0000 for KIS?
+    ubyte name_len;
+    char map_name[name_len];
+    ubyte desc_len;
+    char map_description[desc_len];
+    char unknown2[36];
+    PLYR_PROF players[8];
+} EDTR;
+
+FSeek(FindFirst("TECH", true, false));
+
+struct TECH_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char padding[4];
+    PLYR_TECH player_techs[8];
+} TECH;
+    
+    
