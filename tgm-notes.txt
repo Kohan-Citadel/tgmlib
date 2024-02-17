@@ -19,7 +19,7 @@ MPST chunk:
 	short, but significant differences after making any changes
 
 MGRD chunk:
-	Very large, appears to contain the data for rendering the minimap
+	Very large, appears to contain the data for rendering the minimap. It's size is map_width*map_height*2 + 4
 
 RADR chunk:
 	only contains 4 bytes of data, even in save-games
@@ -37,39 +37,44 @@ TECH chunk:
 	Contains the known techs of each player.
 
 GAME chunk:
+	chunk is always 69712 bytes in KAG maps, regardless of map dimensions. Seems to be 4 bytes shorter in KIS maps.
+SIM  chunk:
 
-TYPE chunk
+MMGR chunk:
 
 
-In the object index, each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
+TYPE chunk:
+	Holds a list of every single graphical object loaded. There are 5 versions of every hero, 2 of every structure or unit, and 1 of every feature or projectile. This corresponds to the object cap overhead for the given object type.
 
-Terrain is 0x0002
-Lairs:
-	DRAGON_LAIR:		0x0303
-	DRAGON_LAIR ruin:	0x0202 (potentially all ruined structures: confirmed)
-Units:
-	Spellcaster:	0x0101
-	Regular:		0x0001
-	
-Corpses are 0x0102
-Heroes are 0x0201
-Hero Corpses are 0x0402
+	Each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
 
-Effects:
-	Dragon_Breath:	0x0705
+	Terrain is 0x0002
+	Lairs:
+		DRAGON_LAIR:		0x0303
+		DRAGON_LAIR ruin:	0x0202 (potentially all ruined structures: confirmed)
+	Units:
+		Spellcaster:	0x0101
+		Regular:		0x0001
+		
+	Corpses are 0x0102
+	Heroes are 0x0201
+	Hero Corpses are 0x0402
+
+	Effects:
+		Dragon_Breath:	0x0705
 
 HROS chunk
-first 4 bytes are a big-endian chunk length, starting at the next byte
-There are 5 more bytes before the individual hero entries start
-Each hero entry consists of their INI filename, followed by 27 bytes
+	first 4 bytes are a big-endian chunk length, starting at the next byte
+	There are 4 more bytes before the individual hero entries start
+	Each hero entry consists of a byte encoding the length of their their INI filename, followed by the filename, followed by 26 bytes. They appear to always be 18 null bytes, 4 ones bytes, and 4 more null bytes.
 
 PLRS chunk
-first 4 bytes are a big-endian chunk length, starting at the next byte
-Contains sections for each player slot, as well as independent
-Each player is 4597 bytes long, and starts with the player name, if one is assigned. Otherwise it will be Player N
+	first 4 bytes are a big-endian chunk length, starting at the next byte
+	Contains sections for each player slot, as well as independent
+	Each player is 4597 bytes long, and starts with the player name, if one is assigned. Otherwise it will be Player N
 
-
-OBJS: objects on the map
+OBJS chunk:
+	contains a list of all the structures and companies on the map and their associated data
 OIDX
 TRGS: game triggers
 SAIP: 

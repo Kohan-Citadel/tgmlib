@@ -89,5 +89,22 @@ struct TECH_CHUNK {
     char padding[4];
     PLYR_TECH player_techs[8];
 } TECH;
+
+FSeek(FindFirst("TYPE", true, false, 0, 0.0, 1, FTell()));
+
+struct TYPE_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char unknown[2];
+    uint16 num_objs;  // The number of objects in the chunk
+    struct TYPE_OBJ {
+        char name[32];
+        byte type1;
+        byte type2;
+    } objects[num_objs];
+} TYPE;
+    
     
     
