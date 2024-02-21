@@ -24,7 +24,7 @@ typedef struct {
     char SAI_medium[SAIm_len];
     ubyte SAIh_len;
     char SAI_hard[SAIh_len];
-} PLYR_PROF <optimize=false>;
+} KNGDM_PROF <optimize=false>;
 
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
@@ -76,7 +76,16 @@ struct EDTR_CHUNK {
     ubyte desc_len;
     char map_description[desc_len];
     char unknown2[36];
-    PLYR_PROF players[8];
+    KNGDM_PROF kingdoms[8];
+    char unknown3[152];
+    struct PLYR_PROF {
+        ubyte name_len;
+        char sai_name[name_len];
+        byte unknown[4];
+        uint32 faction;
+        uint32 team;  //  0xFFFFFFFF is No Team/Custom
+        byte unknown1[4];
+    } players[8] <optimize=false>;
 } EDTR;
 
 FSeek(FindFirst("TECH", true, false));
@@ -105,6 +114,33 @@ struct TYPE_CHUNK {
         byte type2;
     } objects[num_objs];
 } TYPE;
-    
+
+FSeek(FindFirst("PLRS", true, false, 0, 0.0, 1, FTell()));
+
+struct PLRS_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    byte unknows[4];
+    struct PLR_OBJ {
+        uint32 team;
+        byte unknown[8];  // always seems to be 0x1400 0000 0F00 0000
+        char player_name[15];  // 14 characters and null terminated
+        byte faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
+        byte unknown2[12];
+        BigEndian();
+        uint32 sai_len;
+        LittleEndian();
+        char sai_name[sai_len];
+        // There is a ton more data after this,
+        // and apparently no pointer to the next section
+        // so just search for 0x1400 0000 0F00 0000 and pray lol
+        //local uchar search[8] = {20,0,0,0,15,0,0,0};
+        FSeek(FTell()+4096);
+        FSeek(FindFirst("140000000F000000,h", true, false, 0, 0.0, 1, FTell()));
+        FSeek(FTell() - 4);
+    } PLR[8] <optimize=false>;
+} PLRS;
     
     

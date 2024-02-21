@@ -15,11 +15,70 @@ EDTR chunk:
 	name_length bytes containing the map name. 0x85 is the red circle, 0x86 is the crossed swords, 0x8B is sword & shield
 	1 byte storing description length
 	description
+	1 byte defines a kingdom's faction:
+		0x01 is Nationalist
+		0x02 is Royalist
+		0x03 is Council
+		0x04 is Ceyah
 MPST chunk:
 	short, but significant differences after making any changes
 
 MGRD chunk:
 	Very large, appears to contain the data for rendering the minimap. It's size is map_width*map_height*2 + 4
+	Rows run NE to SW, starting at the northern-most tile. Each subsequent row will be to the SE of the previous one. Note that the outer ring of tile that cannot have features placed on them ARE included in the map dimensions.
+	Different terrain have a code like 22 or EE; if it is blended with grass, it will be 02 or 0E
+	Terrain Codes:
+	00 :	Grass
+	33 :	Beach
+	22 :	Corrupt
+	55 :	Desert
+	EE :	Evil
+	66 :	Forest
+	FF :	Forest2
+	77 :	Hills
+	44 :	Jungle
+	CC :	Mountain
+	11 :	Rough
+	88 :	Snow
+	99 :	snow Forest
+	AA :	Snow Mountain
+	BB :	Water
+	
+	Note all tiles rotated so that north is in the upper left
+			
+			0 0
+	0x0B32:	B B
+	
+			B B
+	0x4B2C:	B 4
+	
+			B 4
+	0x4B24:	B 4
+	
+			B 4
+	0x4B34:	B 4
+	
+			B 4
+	0X4B2E:	B B
+	
+			B B
+	0X0B36:	0 0
+	
+			4 B
+	0X4B2B:	B B
+	
+			B B
+	0X0B16:	0 0
+	
+			
+	
+	
+	
+	Color codes (these do NOT correspond to rgb565 colors):
+	0x0010 is grass
+	0x0332 is beach
+	0x0030 is map edge
+	0x0070 is mountain
 
 RADR chunk:
 	only contains 4 bytes of data, even in save-games
@@ -45,7 +104,7 @@ MMGR chunk:
 
 TYPE chunk:
 	Holds a list of every single graphical object loaded. There are 5 versions of every hero, 2 of every structure or unit, and 1 of every feature or projectile. This corresponds to the object cap overhead for the given object type.
-
+	4byte chunk size, followed by 0x0100, then the number of objects loaded, in a little-endian short
 	Each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
 
 	Terrain is 0x0002
