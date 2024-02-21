@@ -11,20 +11,6 @@
 //   History: 
 //------------------------------------------------
 
-typedef struct {
-    ubyte is_active;  // 0x01 for active
-    char padding[3];
-    ubyte name_len;
-    char player_name[name_len];
-    char unknown[4];  // Seems to always be null
-    uint32 team;  // 0-indexed, will be 0xFFFFFFFF if set to 'custom'
-    ubyte SAIe_len;
-    char SAI_easy[SAIe_len];
-    ubyte SAIm_len;
-    char SAI_medium[SAIm_len];
-    ubyte SAIh_len;
-    char SAI_hard[SAIh_len];
-} KNGDM_PROF <optimize=false>;
 
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
@@ -76,7 +62,21 @@ struct EDTR_CHUNK {
     ubyte desc_len;
     char map_description[desc_len];
     char unknown2[36];
-    KNGDM_PROF kingdoms[8];
+    
+    struct KINGDOM {
+        ubyte is_active;  // 0x01 for active
+        char padding[3];
+        ubyte name_len;
+        char player_name[name_len];
+        char unknown[4];  // Seems to always be null
+        uint32 team;  // 0-indexed, will be 0xFFFFFFFF if set to 'custom'
+        ubyte SAIe_len;
+        char SAI_easy[SAIe_len];
+        ubyte SAIm_len;
+        char SAI_medium[SAIm_len];
+        ubyte SAIh_len;
+        char SAI_hard[SAIh_len];
+    } kingdoms[8] <optimize=false>;
 
     struct TEAM {
         char unknown[4];
