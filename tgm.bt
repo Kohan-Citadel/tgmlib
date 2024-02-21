@@ -77,7 +77,16 @@ struct EDTR_CHUNK {
     char map_description[desc_len];
     char unknown2[36];
     KNGDM_PROF kingdoms[8];
-    char unknown3[152];
+
+    struct TEAM {
+        char unknown[4];
+        ubyte name_len;
+        char name[name_len];
+        char unknown2[12];
+    } teams[4] <optimize=false>;
+    
+    char unknown3[84];
+    
     struct PLYR_PROF {
         ubyte name_len;
         char sai_name[name_len];
