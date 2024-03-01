@@ -91,6 +91,29 @@ class tgmFile:
                     new_player['unknown2'],) = struct.unpack('4sII4s', in_fh.read(16))
                     
                     self.players.append(new_player)
+    
+    class TypeChunk:
+        
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[13].data_offset)
+                
+                (self.unknown0,
+                 self.num_objs,) = struct.unpack('HH', in_fh.read(4))
+                
+                self.objs = {}
+                for i in range(0, self.num_objs):
+                    new_obj = {}
+                    name = struct.unpack('32s', in_fh.read(32))[0].rstrip(b'\x00').decode('ascii')
+                    new_obj['name'] = name
+                    new_obj['index'] = i
+                    
+                    (new_obj['type_1'],
+                     new_obj['type_2'],) = struct.unpack('BB', in_fh.read(2))
+                    
+                    self.objs[name] = new_obj
+                    self.objs[i] = new_obj
+            return
 
     
     def load(self):
@@ -100,6 +123,7 @@ class tgmFile:
                 if self.iff.data.formtype != "TGSV":
                     print(f"Error: invalid file type: {self.iff.data.formtype}")
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
+                self.TYPE = self.TypeChunk(self.filename, self.iff)
         return
 
         
@@ -109,5 +133,5 @@ class tgmFile:
                 
 testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
 testTGM.load()
-print(testTGM.EDTR.players[0]['name_len'])
+
 
