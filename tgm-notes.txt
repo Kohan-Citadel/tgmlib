@@ -134,6 +134,27 @@ PLRS chunk
 
 OBJS chunk:
 	contains a list of all the structures and companies on the map and their associated data
+	For structures, offset 0x26 seems to be a set of flags, with the twos-bit set to 0 (so it will read 0x090D instead of 0x090F) if the structure is damaged. In this case, an additional 4 bytes will be inserted that encode the current HP of the structure, as a little endian float
+
+	at offset 0x47 from the end of the hp section is the current militia, stored in a 4-byte little endian float
+	Following this is a 4-byte little-endian float storing the militia regen per second
+	at offset 0x61 from the end of the hp section is the index of the frontline and support militia units, in two bytes each
+	next is the militia company size stored as a single byte,
+	followed by a pascal string of the militia company name
+	next is the max militia, stored in a 4-byte little endian float	
+	
+	Settlements have a number of component sub-chunks. There appears to always be a blank one, plus one for each component in the structure.
+	components are combined together as bit flags:
+	Empty:		0x00
+	Woodmill:	0x01
+	Blacksmith:	0x02
+	Quarry:		0x04
+	Market:		0x08
+	Barracks:	0x10
+	Temple:		0x20
+	Library:	0x40
+	Wall:		0x80
+	
 OIDX
 TRGS: game triggers
 SAIP: 

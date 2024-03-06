@@ -11,6 +11,7 @@
 //   History: 
 //------------------------------------------------
 
+BitfieldDisablePadding();
 
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
@@ -131,9 +132,10 @@ struct PLRS_CHUNK {
     BigEndian();
     uint32 chunk_length;
     LittleEndian();
-    byte unknows[4];
+    byte unknown[4];
     struct PLR_OBJ {
-        uint32 team;
+        local int start_pos = FTell();
+        uint32 uknwn;
         byte unknown[8];  // always seems to be 0x1400 0000 0F00 0000
         char player_name[15];  // 14 characters and null terminated
         byte faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
@@ -146,10 +148,105 @@ struct PLRS_CHUNK {
         // and apparently no pointer to the next section
         // so just search for 0x1400 0000 0F00 0000 and pray lol
         //local uchar search[8] = {20,0,0,0,15,0,0,0};
-        FSeek(FTell()+4096);
-        FSeek(FindFirst("140000000F000000,h", true, false, 0, 0.0, 1, FTell()));
-        FSeek(FTell() - 4);
+        //FSeek(FTell()+4096);
+        //FSeek(FindFirst("140000000F000000,h", true, false, 0, 0.0, 1, FTell()));
+        //FSeek(FTell() - 4);
+        // Players in games that haven't been playen (maps, not save games)
+        // are 4597 bytes long. So just jump to the next one
+        FSeek(start_pos+4597);
     } PLR[8] <optimize=false>;
 } PLRS;
+
+FSeek(FindFirst("OBJS", true, false, 0, 0.0, 1, FTell()));
+
+typedef struct {
+    float gold_spent;
+    int size;
+    char data[size];  // can be safely zeroed
+} COMPONENT <optimize=false>;
+
+
+typedef struct {
+    byte uk0;  // Always seems to be 24
+    byte player;  // 0-indexed player number of owner
+    uint16 index;  // index of object in TYPE list
+    uint32 id;  // ID shown in editor
+    float hotspot_se; // center of the sprite along the SE axis
+    float hotspot_sw; // center of the sprite along the SW axis
+    char name[20];  // fixed length and null terminated
+    byte flag1;
+    byte flag2;  // equals 0x0D if structure is damaged
+    if (flag2 == 13) {
+        float current_hp;
+    }
+    char unknown1[17];
+    uint16 pos_se;
+    uint16 pos_sw;
+    float gold_production;
+    float stone_production;
+    float wood_production;
+    float iron_production;
+    float mana_production;
+    char unknown2[1];
+    float max_hp;
+    char unknown0[4];
+    float booty_value;
+    char padding[5];
+    float supply_zone;
+    char unknown3[8];
+    float militia_curr;
+    float militia_regen;
+    char unknown4[9];
+    float guard_zone;
+    char unknown5[5];
+    uint16 militia_front;
+    uint16 militia_support;
+    byte company_size;
+    byte name_len;
+    char company_name[name_len];
+    float militia_max;
+    char unknown6[10];
     
+    // each base component is encoded by 1 bit, ordered from highest to lowest:
+    // Wall (128), Library (64), Temple (32), Barracks (16), Market (8), Quarry (4), Blacksmith (2), Woodmill (1)
+    struct COMP_LIST {
+        int wall: 1;
+        int library: 1;
+        int temple: 1;
+        int barracks: 1;
+        int market: 1;
+        int quarry: 1;
+        int blacksmith: 1;
+        int woodmill: 1;
+    } component_list;
+    
+    char unknown7[4];
+    int important0;  // Always seems to be 0x00FF FF00, something to so with structure state/status
+    char unknown8[25];  // Can be safely zeroed
+    int block_size_1;
+    char block_1[block_size_1]; // can be safely zeroed
+    
+    int important1;
+    int is_long;  // seems to indicate whether this part is 13 or 20 bytes long
+    if (is_long == 1) {
+        char block_2[12];
+    } else {
+        char block_2[5];
+    }
+    
+    COMPONENT components[1];
+} MAP_OBJ <optimize=false,comment=ObjComment>;
+
+string ObjComment( MAP_OBJ &obj ) {
+    return Str("%s", TYPE.objects[obj.index].name);
+}
+
+struct OBJS_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length;
+    LittleEndian();
+    char unknown[4];
+    MAP_OBJ test;
+} OBJS;           
     
