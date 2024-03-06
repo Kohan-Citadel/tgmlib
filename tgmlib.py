@@ -91,6 +91,7 @@ class tgmFile:
                     new_player['unknown2'],) = struct.unpack('4sII4s', in_fh.read(16))
                     
                     self.players.append(new_player)
+            return
     
     class TypeChunk:
         
@@ -111,10 +112,43 @@ class tgmFile:
                     (new_obj['type_1'],
                      new_obj['type_2'],) = struct.unpack('BB', in_fh.read(2))
                     
+                    # This allows for lookup by either name or index, and both will point to the same mutable object
                     self.objs[name] = new_obj
                     self.objs[i] = new_obj
             return
-
+    
+    class PlrsChunk:
+        
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[15].data_offset)
+                (unknown0,) = struct.unpack('I', in_fh.read(4))
+                
+                self.players = []
+                for i in range(0, 8):
+                    start_pos = in_fh.tell()
+                    new_player = {}
+                    (new_player['unknown'],
+                     new_player['unknown0'],) = struct.unpack('I8s', in_fh.read(12))
+                    print(f'pos: {in_fh.tell()}')
+                    new_player['name'] = struct.unpack('15s', in_fh.read(15))[0].rstrip(b'\x00').decode('utf-8')
+                    print(new_player['name'])
+                    (new_player['faction'],
+                     new_player['unknown1'],
+                     new_player['sai_len'],) = struct.unpack('B12sxxxB', in_fh.read(17))
+                    print(new_player['sai_len'])
+                    (new_player['sai_name'],) = struct.unpack(f'{new_player["sai_len"]}s', in_fh.read(new_player['sai_len']))
+                    in_fh.seek(start_pos+4597)
+            return
+        
+    class ObjsChunk:
+        
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[16].data_offset)
+                
+                
+                
     
     def load(self):
         match self.read_from:
@@ -124,6 +158,7 @@ class tgmFile:
                     print(f"Error: invalid file type: {self.iff.data.formtype}")
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
+                self.PLRS = self.PlrsChunk(self.filename, self.iff)
         return
 
         
