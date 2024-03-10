@@ -109,8 +109,8 @@ class tgmFile:
                     new_obj['name'] = name
                     new_obj['index'] = i
                     
-                    (new_obj['type_1'],
-                     new_obj['type_2'],) = struct.unpack('BB', in_fh.read(2))
+                    (new_obj['subtype'],
+                     new_obj['type'],) = struct.unpack('BB', in_fh.read(2))
                     
                     # This allows for lookup by either name or index, and both will point to the same mutable object
                     self.objs[name] = new_obj
@@ -143,9 +143,110 @@ class tgmFile:
         
     class ObjsChunk:
         
-        def __init__(self, filename: str, iff: ifflib.iff_file):
+        class MapObj:
+            def __init__(self, in_fh, TYPE):
+                print(f'starting read at {in_fh.tell()}')
+                (self.unknown0,
+                 self.player,
+                 self.index,
+                 self.editor_id,
+                 self.hotspot_se,
+                 self.hotspot_sw,
+                 self.name,
+                 self.flag1,
+                 self.flag2,) = struct.unpack('=BBHIff20sBB', in_fh.read(38))
+                if self.flag2 == 13:
+                    (self.current_hp,) = struct.unpack('=f', in_fh.read(4))
+                (self.unknown1,
+                 self.status,
+                 self.unknown2,
+                 self.pos_se,
+                 self.pos_sw,
+                 self.current_gold_production,
+                 self.current_stone_production,
+                 self.current_wood_production,
+                 self.current_iron_production,
+                 self.current_mana_production,
+                 self.unknown3,
+                 self.max_hp,
+                 self.unknown4,
+                 self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', in_fh.read(54))
+                print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
+                match TYPE.objs[self.index]['subtype']:
+                    case 1|5|6|7|8:
+                        (self.unknown5,
+                         self.supply_zone,
+                         self.unknown6,
+                         self.current_militia,
+                         self.militia_regen,
+                         self.unknown7,
+                         self.guard_zone,
+                         self.unknown8,
+                         self.militia_front,
+                         self.militia_support,
+                         self.company_size,
+                         self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
+                        (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
+                        (self.max_militia,
+                         self.unknown9,
+                         self.component_bitflag,
+                         self.unknown10,
+                         self.inportant0) = struct.unpack('=f10sB4sI', in_fh.read(23))
+                        in_fh.seek(25,1)
+                        (self.block_size0,) = struct.unpack('=I', in_fh.read(4))
+                        in_fh.seek(self.block_size0,1)
+                        (self.important1,
+                         self.is_long,) = struct.unpack('=II', in_fh.read(8))
+                        self.block_size1 = 12 if self.is_long else 5
+                        (self.block1,) = struct.unpack(f'={self.block_size1}s', in_fh.read(self.block_size1))
+                        self.components = []
+                        self.ct_components = 0
+                        # Counts the number of high bits in the bitflag
+                        x = self.component_bitflag
+                        for _ in range(0,8):
+                            self.ct_components += x&1
+                            x >>= 1
+                        for i in range(self.ct_components):
+                            new_comp = {}
+                            (new_comp['gold_spent'],
+                             new_comp['size'],) = struct.unpack('=fI', in_fh.read(8))
+                            (new_comp['data'],) = struct.unpack(f"={new_comp['size']}s", in_fh.read(new_comp['size']))
+                        in_fh.seek(264,1) # Skips the blank component slot
+                    
+                    case 2:
+                        (self.unknown5,
+                         self.supply_zone,
+                         self.unknown6,
+                         self.current_militia,
+                         self.militia_regen,
+                         self.unknown7,
+                         self.guard_zone,
+                         self.unknown8,
+                         self.militia_front,
+                         self.militia_support,
+                         self.company_size,
+                         self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
+                        (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
+                        (self.max_militia,
+                         self.unknown9,)  = struct.unpack('=f6s', in_fh.read(10))
+                    
+                    case 4:
+                        (self.unknown5,
+                         self.base_gold_production,
+                         self.base_stone_production,
+                         self.base_wood_production,
+                         self.base_iron_production,
+                         self.base_mana_production,) = struct.unpack('=26sfffff', in_fh.read(46))
+        
+        
+        def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[16].data_offset)
+                self.unknown0 = struct.unpack('=4s', in_fh.read(4))
+                self.objs = []
+                
+                while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 18):
+                            self.objs.append(self.MapObj(in_fh, TYPE))
                 
                 
                 
@@ -159,6 +260,7 @@ class tgmFile:
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
                 self.PLRS = self.PlrsChunk(self.filename, self.iff)
+                self.OBJS = self.ObjsChunk(self.filename, self.iff, self.TYPE)
         return
 
         
@@ -168,5 +270,10 @@ class tgmFile:
                 
 testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
 testTGM.load()
+for obj in testTGM.TYPE.objs.values():
+    print(obj)
+
+for obj in testTGM.OBJS.objs:
+    print(obj)
 
 

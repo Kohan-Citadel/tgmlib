@@ -106,22 +106,45 @@ TYPE chunk:
 	Holds a list of every single graphical object loaded. There are 5 versions of every hero, 2 of every structure or unit, and 1 of every feature or projectile. This corresponds to the object cap overhead for the given object type.
 	4byte chunk size, followed by 0x0100, then the number of objects loaded, in a little-endian short
 	Each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
-
-	Terrain is 0x0002
-	Lairs:
-		DRAGON_LAIR:		0x0303
-		DRAGON_LAIR ruin:	0x0202 (potentially all ruined structures: confirmed)
-	Units:
-		Spellcaster:	0x0101
-		Regular:		0x0001
-		
-	Corpses are 0x0102
-	Heroes are 0x0201
-	Hero Corpses are 0x0402
-
-	Effects:
-		Dragon_Breath:	0x0705
-
+	Types:
+	1: Unit
+		These subtype values match the "Class" value in the INI
+		0: Non-Spellcasters (includes monsters, militia, captains, etc)
+		1: Spellcasters
+		2: Heroes
+			Includes one entry with the filename, and three more with the display name followed by the ascension level
+	2: Feature
+		These subtype values match the "Class" value in the INI
+		0: Terrain features without collision (trees, flowers, runes, etc)
+		1: Unit corpses
+		2: Building ruins (destroyed structures). Includes lairs, ruin, settlements, outposts, etc.
+		3: Terrain features with collision (lava doodads, mountains, snow chasm)
+		4: Hero corpses
+		5: Start Position
+		6: Features with complex animations (Ant lion, volcano, bug mounds, etc)
+	3: Building
+		0: Ruins (exploreable touch lairs) & Flag
+		1: Mareten Settlements (anything you can recruit settlers from)
+		2: Outposts, Forts, and Dark Chasm
+		3: Lairs
+		4: Mines
+		5: Drauga Settlements
+		6: Gauri Settlements
+		7: Haroun Settlements
+		8: Slaanri Settlements
+	4: Company
+		0: Company
+		1: Regiment (locked-formation selection group?)
+	5: Projectile
+		0: Normal projectiles
+		1: Projectiles with attached FX
+		2: Meteors
+		3: empty
+		4: Lightning
+		5: Catapult_Shot (this gets used for leech spells for some reason)
+		6: Chain Lightning
+		7: Fans (used for breath weapons)
+	
 HROS chunk
 	first 4 bytes are a big-endian chunk length, starting at the next byte
 	There are 4 more bytes before the individual hero entries start
