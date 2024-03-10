@@ -1,0 +1,328 @@
+//------------------------------------------------
+//--- 010 Editor v14.0 Binary Template
+//
+//      File: 
+//   Authors: 
+//   Version: 
+//   Purpose: 
+//  Category: 
+// File Mask: 
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+BitfieldDisablePadding();
+ThemeAutoScaleColors(false);
+local ubyte write_log = false;
+if (write_log == true) {
+    local int fh = FileNew("Text");
+};
+
+// represents a single technology in a player section in the TECH chunk
+typedef struct {
+    uint32 name_len;
+    char tech_name[name_len];
+} TECHNOLOGY <optimize=false>;
+
+// represents a player's technologies in the TECH chunk
+typedef struct {
+    uint32 player_number;  // This is 0-indexed
+    uint32 num_techs;  // Number of known technologies
+    TECHNOLOGY known_techs[num_techs];
+} PLYR_TECH <optimize=false>;
+    
+struct FORM_CHUNK {
+    char chunk_name[4];  // Always FORM
+    BigEndian();
+    int32 length <fgcolor=0x3C8E38>;  //length in bytes from start of HEDR to end of file
+    LittleEndian();
+    char file_type[4];  // TGSV for .TGM
+} FORM;
+
+struct HEDR_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    char unknown[8]; // Seems to be 0400 0300 across maps
+} HEDR;
+
+struct GVER_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    char unknown[8];  // Seems to always be 0x 0_00 0000 0401 0000
+    char game_version[12];
+    FSeek(FindFirst("EDTR", true, false));  // Skips ahead to the next chunk
+} GVER;
+
+struct EDTR_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    char unknown[4];  // 0x0600 0000 for KAG, 0x0500 0000 for KIS?
+    ubyte name_len;
+    char map_name[name_len];
+    ubyte desc_len;
+    char map_description[desc_len];
+    char unknown2[36];
+    
+    struct KINGDOM {
+        ubyte is_active;  // 0x01 for active
+        char padding[3];
+        ubyte name_len;
+        char player_name[name_len];
+        char unknown[4];  // Seems to always be null
+        uint32 team;  // 0-indexed, will be 0xFFFFFFFF if set to 'custom'
+        ubyte SAIe_len;
+        char SAI_easy[SAIe_len];
+        ubyte SAIm_len;
+        char SAI_medium[SAIm_len];
+        ubyte SAIh_len;
+        char SAI_hard[SAIh_len];
+    } kingdoms[8] <optimize=false>;
+
+    struct TEAM {
+        char unknown[4];
+        ubyte name_len;
+        char name[name_len];
+        char unknown2[12];
+    } teams[4] <optimize=false>;
+    
+    char unknown3[84];
+    
+    struct PLYR_PROF {
+        ubyte name_len;
+        char sai_name[name_len];
+        byte unknown[4];
+        uint32 faction;
+        uint32 team;  //  0xFFFFFFFF is No Team/Custom
+        byte unknown1[4];
+    } players[8] <optimize=false>;
+} EDTR;
+
+FSeek(FindFirst("TECH", true, false));
+
+struct TECH_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    char padding[4];
+    PLYR_TECH player_techs[8];
+} TECH;
+
+FSeek(FindFirst("TYPE", true, false, 0, 0.0, 1, FTell()));
+
+struct TYPE_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    char unknown[2];
+    uint16 num_objs;  // The number of objects in the chunk
+    struct TYPE_OBJ {
+        char name[32];
+        byte sub_type;
+        byte type;
+        if (write_log) {
+            FPrintf(fh, "%s,%i,%i\n", name, type, sub_type);
+        }; 
+    } objects[num_objs] <optimize=false>;
+} TYPE;
+
+FSeek(FindFirst("PLRS", true, false, 0, 0.0, 1, FTell()));
+
+struct PLRS_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    byte unknown[4];
+    struct PLR_OBJ {
+        local int start_pos = FTell();
+        uint32 uknwn;
+        byte unknown[8];  // always seems to be 0x1400 0000 0F00 0000
+        char player_name[15];  // 14 characters and null terminated
+        byte faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
+        byte unknown2[12];
+        BigEndian();
+        uint32 sai_len;
+        LittleEndian();
+        char sai_name[sai_len];
+        // There is a ton more data after this,
+        // and apparently no pointer to the next section
+        // so just search for 0x1400 0000 0F00 0000 and pray lol
+        //local uchar search[8] = {20,0,0,0,15,0,0,0};
+        //FSeek(FTell()+4096);
+        //FSeek(FindFirst("140000000F000000,h", true, false, 0, 0.0, 1, FTell()));
+        //FSeek(FTell() - 4);
+        // Players in games that haven't been playen (maps, not save games)
+        // are 4597 bytes long. So just jump to the next one
+        FSeek(start_pos+4597);
+    } PLR[8] <optimize=false>;
+} PLRS;
+
+FSeek(FindFirst("OBJS", true, false, 0, 0.0, 1, FTell()));
+
+typedef struct {
+    byte uk0;  // Always seems to be 24
+    byte player;  // 0-indexed player number of owner
+    uint16 index <comment=Str("%s",TYPE.objects[this].name)>;  // index of object in TYPE list
+    uint32 id;  // ID shown in editor
+    float hotspot_se; // center of the sprite along the SE axis
+    float hotspot_sw; // center of the sprite along the SW axis
+    char name[20];  // fixed length and null terminated
+    byte flag1;
+    byte flag2;  // equals 0x0D if structure is at a different HP than specified in INI
+    if (flag2 == 13) {
+        float current_hp;
+    }
+    char unknown1[12];
+    ubyte status <comment=ObjStatusComment>;
+    float uk1;
+    uint16 pos_se;
+    uint16 pos_sw;
+    // Amount currently being produced
+    float net_gold_production <fgcolor=cBlack, bgcolor=0x00DCFC>;
+    float net_stone_production <fgcolor=cYellow, bgcolor=0x707070>;
+    float net_wood_production <fgcolor=cYellow, bgcolor=0x2A578B>;
+    float net_iron_production <fgcolor=cYellow, bgcolor=0x505050>;
+    float net_mana_production <fgcolor=cYellow, bgcolor=0xD27619>;
+    char unknown2[1];
+    float max_hp;
+    char unknown0[4];
+    float booty_value;
+    
+    // the rest of the data is dependent on object type
+    switch(TYPE.objects[index].sub_type) {
+        // all settlements
+        case 1:
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+            char padding[5];
+            float supply_zone;
+            char unknown3[8];
+            float militia_curr;
+            float militia_regen;
+            char unknown4[9];
+            float guard_zone;
+            char unknown5[5];
+            uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
+            uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
+            byte company_size;
+            byte name_len;
+            char company_name[name_len];
+            float militia_max;
+            char unknown6[10];
+            
+            // each base component is encoded by 1 bit, ordered from highest to lowest:
+            // Wall (128), Library (64), Temple (32), Barracks (16), Market (8), Quarry (4), Blacksmith (2), Woodmill (1)
+            struct COMP_LIST {
+                BigEndian();
+                int wall: 1;
+                int library: 1;
+                int temple: 1;
+                int barracks: 1;
+                int market: 1;
+                int quarry: 1;
+                int blacksmith: 1;
+                int woodmill: 1;
+                LittleEndian();
+                
+                local int count = wall + library + temple + barracks + market + quarry + blacksmith + woodmill;
+            } component_list;
+            
+                        
+            
+            char unknown7[4];
+            int important0 <fgcolor=cDkRed>;  // Always seems to be 0x00FF FF00, something to do with structure state/status
+            char unknown8[25] <fgcolor=cDkGray>;  // Can be safely zeroed
+            int block_size_1 <fgcolor=0x3C8E38>;
+            char block_1[block_size_1] <fgcolor=cDkGray>; // can be safely zeroed
+            
+            int important1;
+            int is_long;  // seems to indicate whether this part is 13 or 20 bytes long
+            if (is_long == 1) {
+                char block_2[12];
+            } else {
+                char block_2[5];
+            }
+            struct COMPONENT {
+                local float check_cost = ReadFloat();
+                if (check_cost > 1.0) {
+                    float gold_spent <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                }        
+                int size <fgcolor=0x3C8E38>;
+                char data[size] <fgcolor=cDkGray>;  // can be safely zeroed
+            // +1 accounts for adtl blank component block
+            } components[component_list.count+1] <optimize=false>;
+            break;
+        // outposts
+        case 2:
+            char padding[5];
+            float supply_zone;
+            char unknown3[8];
+            float militia_curr;
+            float militia_regen;
+            char unknown4[9];
+            float guard_zone;
+            char unknown5[5];
+            uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
+            uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
+            byte company_size;
+            byte name_len;
+            char company_name[name_len];
+            float militia_max;
+            char unknown7[6];
+            break;
+        // mines
+        case 4:
+            char unknown7[26];
+            // structure base amount
+            float gold_production <fgcolor=cBlack, bgcolor=0x00DCFC>;
+            float stone_production <fgcolor=cYellow, bgcolor=0x707070>;
+            float wood_production <fgcolor=cYellow, bgcolor=0x2A578B>;
+            float iron_production <fgcolor=cYellow, bgcolor=0x505050>;
+            float mana_production <fgcolor=cYellow, bgcolor=0xD27619>;
+            break;
+        };
+
+} MAP_OBJ <optimize=false,comment=Str("%s, %i %i", TYPE.objects[this.index].name, TYPE.objects[this.index].type, TYPE.objects[this.index].sub_type)>;
+
+string ObjStatusComment(ubyte &status) {
+    switch(status) {
+        case 0:
+            return "Normal";
+        case 1:
+            return "Constructing";
+        case 2:
+            return "Destroyed";
+        case 3:
+            return "Causes crash in SIM";
+        case 4:
+            return "Mining";
+        case 6:
+            return "Out of Supply";
+        default:
+            return "Unknow Status";
+    }
+}
+            
+
+struct OBJS_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    local int start_pos = FTell();
+    char unknown[4];
+    while (FTell() < (start_pos + chunk_length - 18)) {
+        MAP_OBJ obj;
+    }
+} OBJS;           
+    

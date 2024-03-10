@@ -1,0 +1,189 @@
+FORM chunk
+	4 bytes big-endian: size of file not including FORM
+	TGSV (time gate save)
+HEDR chunk
+	standard 4byte chunk length
+	followed by 8 bytes
+GVER chunk
+	standard 4byte chunk length
+	Compatible game versions
+	Switched for settings toggles (which zones to display, etc) However, they don't seem to do anything. When zeroed, the map will load and the game will repopulate it when saved.
+EDTR chunk:
+	standard 4byte chunk length
+	0x60 for KAG maps, 0x50 for KIS, followed by 0x000000
+	1 byte storing name length
+	name_length bytes containing the map name. 0x85 is the red circle, 0x86 is the crossed swords, 0x8B is sword & shield
+	1 byte storing description length
+	description
+	1 byte defines a kingdom's faction:
+		0x01 is Nationalist
+		0x02 is Royalist
+		0x03 is Council
+		0x04 is Ceyah
+MPST chunk:
+	short, but significant differences after making any changes
+
+MGRD chunk:
+	Very large, appears to contain the data for rendering the minimap. It's size is map_width*map_height*2 + 4
+	Rows run NE to SW, starting at the northern-most tile. Each subsequent row will be to the SE of the previous one. Note that the outer ring of tile that cannot have features placed on them ARE included in the map dimensions.
+	Different terrain have a code like 22 or EE; if it is blended with grass, it will be 02 or 0E
+	Terrain Codes:
+	00 :	Grass
+	33 :	Beach
+	22 :	Corrupt
+	55 :	Desert
+	EE :	Evil
+	66 :	Forest
+	FF :	Forest2
+	77 :	Hills
+	44 :	Jungle
+	CC :	Mountain
+	11 :	Rough
+	88 :	Snow
+	99 :	snow Forest
+	AA :	Snow Mountain
+	BB :	Water
+	
+	Note all tiles rotated so that north is in the upper left
+			
+			0 0
+	0x0B32:	B B
+	
+			B B
+	0x4B2C:	B 4
+	
+			B 4
+	0x4B24:	B 4
+	
+			B 4
+	0x4B34:	B 4
+	
+			B 4
+	0X4B2E:	B B
+	
+			B B
+	0X0B36:	0 0
+	
+			4 B
+	0X4B2B:	B B
+	
+			B B
+	0X0B16:	0 0
+	
+			
+	
+	
+	
+	Color codes (these do NOT correspond to rgb565 colors):
+	0x0010 is grass
+	0x0332 is beach
+	0x0030 is map edge
+	0x0070 is mountain
+
+RADR chunk:
+	only contains 4 bytes of data, even in save-games
+
+FTRS chunk:
+	Contains a list of "features", with each entry being 0x10 bytes long, and padded with 0x092F. The first byte is 0x10, likely signifying the length.
+
+FIDX chunk:
+	very short
+
+CMPG chunk:
+	Seems to always be 0x 0000 0000 0000 0000
+
+TECH chunk:
+	Contains the known techs of each player.
+
+GAME chunk:
+	chunk is always 69712 bytes in KAG maps, regardless of map dimensions. Seems to be 4 bytes shorter in KIS maps.
+SIM  chunk:
+
+MMGR chunk:
+
+
+TYPE chunk:
+	Holds a list of every single graphical object loaded. There are 5 versions of every hero, 2 of every structure or unit, and 1 of every feature or projectile. This corresponds to the object cap overhead for the given object type.
+	4byte chunk size, followed by 0x0100, then the number of objects loaded, in a little-endian short
+	Each entry is 34 bytes long the last 2(?) of which seem to demark what type of object it is
+	Types:
+	1: Unit
+		These subtype values match the "Class" value in the INI
+		0: Non-Spellcasters (includes monsters, militia, captains, etc)
+		1: Spellcasters
+		2: Heroes
+			Includes one entry with the filename, and three more with the display name followed by the ascension level
+	2: Feature
+		These subtype values match the "Class" value in the INI
+		0: Terrain features without collision (trees, flowers, runes, etc)
+		1: Unit corpses
+		2: Building ruins (destroyed structures). Includes lairs, ruin, settlements, outposts, etc.
+		3: Terrain features with collision (lava doodads, mountains, snow chasm)
+		4: Hero corpses
+		5: Start Position
+		6: Features with complex animations (Ant lion, volcano, bug mounds, etc)
+	3: Building
+		0: Ruins (exploreable touch lairs) & Flag
+		1: Mareten Settlements (anything you can recruit settlers from)
+		2: Outposts, Forts, and Dark Chasm
+		3: Lairs
+		4: Mines
+		5: Drauga Settlements
+		6: Gauri Settlements
+		7: Haroun Settlements
+		8: Slaanri Settlements
+	4: Company
+		0: Company
+		1: Regiment (locked-formation selection group?)
+	5: Projectile
+		0: Normal projectiles
+		1: Projectiles with attached FX
+		2: Meteors
+		3: empty
+		4: Lightning
+		5: Catapult_Shot (this gets used for leech spells for some reason)
+		6: Chain Lightning
+		7: Fans (used for breath weapons)
+	
+HROS chunk
+	first 4 bytes are a big-endian chunk length, starting at the next byte
+	There are 4 more bytes before the individual hero entries start
+	Each hero entry consists of a byte encoding the length of their their INI filename, followed by the filename, followed by 26 bytes. They appear to always be 18 null bytes, 4 ones bytes, and 4 more null bytes.
+
+PLRS chunk
+	first 4 bytes are a big-endian chunk length, starting at the next byte
+	Contains sections for each player slot, as well as independent
+	Each player is 4597 bytes long, and starts with the player name, if one is assigned. Otherwise it will be Player N
+
+OBJS chunk:
+	contains a list of all the structures and companies on the map and their associated data
+	For structures, offset 0x26 seems to be a set of flags, with the twos-bit set to 0 (so it will read 0x090D instead of 0x090F) if the structure is damaged. In this case, an additional 4 bytes will be inserted that encode the current HP of the structure, as a little endian float
+
+	at offset 0x47 from the end of the hp section is the current militia, stored in a 4-byte little endian float
+	Following this is a 4-byte little-endian float storing the militia regen per second
+	at offset 0x61 from the end of the hp section is the index of the frontline and support militia units, in two bytes each
+	next is the militia company size stored as a single byte,
+	followed by a pascal string of the militia company name
+	next is the max militia, stored in a 4-byte little endian float	
+	
+	Settlements have a number of component sub-chunks. There appears to always be a blank one, plus one for each component in the structure.
+	components are combined together as bit flags:
+	Empty:		0x00
+	Woodmill:	0x01
+	Blacksmith:	0x02
+	Quarry:		0x04
+	Market:		0x08
+	Barracks:	0x10
+	Temple:		0x20
+	Library:	0x40
+	Wall:		0x80
+	
+OIDX
+TRGS: game triggers
+SAIP: 
+SAIM
+TRTY
+QLOG
+DLIS
+ONMS
+MLOG
