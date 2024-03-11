@@ -4,6 +4,7 @@ import ifflib
 import struct
 from pathlib import Path
 from dataclasses import dataclass, field
+from pprint import pprint
 
 
 class tgmFile:
@@ -144,6 +145,24 @@ class tgmFile:
     class ObjsChunk:
         
         class MapObj:
+            
+            class MilitiaData:
+                def __init__(self, in_fh):
+                    (self.unknown0,
+                     self.supply_zone,
+                     self.unknown1,
+                     self.current_militia,
+                     self.militia_regen,
+                     self.unknown2,
+                     self.guard_zone,
+                     self.unknown3,
+                     self.militia_front,
+                     self.militia_support,
+                     self.company_size,
+                     self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
+                    (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
+                    (self.max_militia,) = struct.unpack('=f', in_fh.read(4))
+            
             def __init__(self, in_fh, TYPE):
                 print(f'starting read at {in_fh.tell()}')
                 (self.unknown0,
@@ -157,6 +176,8 @@ class tgmFile:
                  self.flag2,) = struct.unpack('=BBHIff20sBB', in_fh.read(38))
                 if self.flag2 == 13:
                     (self.current_hp,) = struct.unpack('=f', in_fh.read(4))
+                elif self.flag2 == 7:
+                    (self.unknown_flag_data,) = struct.unpack('=B', in_fh.read(1))
                 (self.unknown1,
                  self.status,
                  self.unknown2,
@@ -171,27 +192,14 @@ class tgmFile:
                  self.max_hp,
                  self.unknown4,
                  self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', in_fh.read(54))
-                print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
+                #print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
                 match TYPE.objs[self.index]['subtype']:
                     case 1|5|6|7|8:
-                        (self.unknown5,
-                         self.supply_zone,
-                         self.unknown6,
-                         self.current_militia,
-                         self.militia_regen,
-                         self.unknown7,
-                         self.guard_zone,
-                         self.unknown8,
-                         self.militia_front,
-                         self.militia_support,
-                         self.company_size,
-                         self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
-                        (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
-                        (self.max_militia,
-                         self.unknown9,
+                        self.militia_data = self.MilitiaData(in_fh)
+                        (self.unknown9,
                          self.component_bitflag,
                          self.unknown10,
-                         self.inportant0) = struct.unpack('=f10sB4sI', in_fh.read(23))
+                         self.inportant0) = struct.unpack('=10sB4sI', in_fh.read(19))
                         in_fh.seek(25,1)
                         (self.block_size0,) = struct.unpack('=I', in_fh.read(4))
                         in_fh.seek(self.block_size0,1)
@@ -214,22 +222,12 @@ class tgmFile:
                         in_fh.seek(264,1) # Skips the blank component slot
                     
                     case 2:
-                        (self.unknown5,
-                         self.supply_zone,
-                         self.unknown6,
-                         self.current_militia,
-                         self.militia_regen,
-                         self.unknown7,
-                         self.guard_zone,
-                         self.unknown8,
-                         self.militia_front,
-                         self.militia_support,
-                         self.company_size,
-                         self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
-                        (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
-                        (self.max_militia,
-                         self.unknown9,)  = struct.unpack('=f6s', in_fh.read(10))
-                    
+                        self.militia_data = self.MilitiaData(in_fh)
+                        (self.unknown9,)  = struct.unpack('=6s', in_fh.read(6))
+                    case 3:
+                        self.militia_data = self.MilitiaData(in_fh)
+                        (self.unknown5,) = struct.unpack('=17s', in_fh.read(17))
+                        
                     case 4:
                         (self.unknown5,
                          self.base_gold_production,
@@ -247,7 +245,8 @@ class tgmFile:
                 
                 while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 18):
                             self.objs.append(self.MapObj(in_fh, TYPE))
-                
+                            pprint(vars(self.objs[-1]))   
+                            print('')
                 
                 
     
@@ -275,5 +274,7 @@ for obj in testTGM.TYPE.objs.values():
 
 for obj in testTGM.OBJS.objs:
     print(obj)
+
+print(testTGM.OBJS.objs[30].base_iron_production)
 
 

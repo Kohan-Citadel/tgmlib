@@ -179,6 +179,8 @@ typedef struct {
     byte flag2;  // equals 0x0D if structure is at a different HP than specified in INI
     if (flag2 == 13) {
         float current_hp;
+    } else if (flag2 == 7) {  // 0x07 for spider lair in bonehenge
+        byte unknown_data;
     }
     char unknown1[12];
     ubyte status <comment=ObjStatusComment>;
@@ -196,6 +198,23 @@ typedef struct {
     char unknown0[4];
     float booty_value;
     
+    typedef struct {
+        char padding[5];
+        float supply_zone;
+        char unknown3[8];
+        float militia_curr;
+        float militia_regen;
+        char unknown4[9];
+        float guard_zone;
+        char unknown5[5];
+        uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
+        uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
+        byte company_size;
+        byte name_len;
+        char company_name[name_len];
+        float militia_max;
+    } MILITIA_DATA;
+    
     // the rest of the data is dependent on object type
     switch(TYPE.objects[index].sub_type) {
         // all settlements
@@ -204,20 +223,7 @@ typedef struct {
         case 6:
         case 7:
         case 8:
-            char padding[5];
-            float supply_zone;
-            char unknown3[8];
-            float militia_curr;
-            float militia_regen;
-            char unknown4[9];
-            float guard_zone;
-            char unknown5[5];
-            uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
-            uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
-            byte company_size;
-            byte name_len;
-            char company_name[name_len];
-            float militia_max;
+            MILITIA_DATA militia_data;
             char unknown6[10];
             
             // each base component is encoded by 1 bit, ordered from highest to lowest:
@@ -236,8 +242,6 @@ typedef struct {
                 
                 local int count = wall + library + temple + barracks + market + quarry + blacksmith + woodmill;
             } component_list;
-            
-                        
             
             char unknown7[4];
             int important0 <fgcolor=cDkRed>;  // Always seems to be 0x00FF FF00, something to do with structure state/status
@@ -264,21 +268,13 @@ typedef struct {
             break;
         // outposts
         case 2:
-            char padding[5];
-            float supply_zone;
-            char unknown3[8];
-            float militia_curr;
-            float militia_regen;
-            char unknown4[9];
-            float guard_zone;
-            char unknown5[5];
-            uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
-            uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
-            byte company_size;
-            byte name_len;
-            char company_name[name_len];
-            float militia_max;
+            MILITIA_DATA militia_data;
             char unknown7[6];
+            break;
+        // lairs
+        case 3:
+            MILITIA_DATA militia_data;
+            char unknown5[17];
             break;
         // mines
         case 4:
