@@ -6,7 +6,7 @@
 //   Version: 
 //   Purpose: 
 //  Category: 
-// File Mask: 
+// File Mask: *.TGM
 //  ID Bytes: 
 //   History: 
 //------------------------------------------------
@@ -17,6 +17,12 @@ local ubyte write_log = false;
 if (write_log == true) {
     local int fh = FileNew("Text");
 };
+local uint offset = 12;  // to account for FORM chunk
+
+typedef struct {
+    float se;
+    float sw;
+} HOTSPOT;
 
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
@@ -44,34 +50,51 @@ struct HEDR_CHUNK {
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-    char unknown[8]; // Seems to be 0400 0300 across maps
+    int required <fgcolor=cDkRed>; // Seems to be 0400 0300 across maps
+    char null[4] <fgcolor=cDkGray>; // Can be safely zeroed
 } HEDR;
+
+offset += HEDR.chunk_length + 8;
+FSeek(offset);
 
 struct GVER_CHUNK {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-    char unknown[8];  // Seems to always be 0x 0_00 0000 0401 0000
-    char game_version[12];
-    FSeek(FindFirst("EDTR", true, false));  // Skips ahead to the next chunk
+    local int start_pos = FTell();
+    byte required <fgcolor=cDkRed>; // must be at least 0x01 or the map size won't display in custom scenario
+                                     // and no more than 0x0C or the map won't load
+    char null0[7] <fgcolor=cDkGray>;  // Seems to always be 0x 00 0000 0401 0000
+    char game_version[12] <fgcolor=cDkGray>;  // This doesn't seem to be used anywhere, though perhaps prevents outdated games from loading it?
+    char null1[chunk_length + start_pos - FTell()] <fgcolor=cDkGray>;
 } GVER;
+
+offset += GVER.chunk_length + 8;
+FSeek(offset);
 
 struct EDTR_CHUNK {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-    char unknown[4];  // 0x0600 0000 for KAG, 0x0500 0000 for KIS?
+    int required <fgcolor=cDkRed>; // needs to be 0x06 (0x05 in some KIS maps)
     ubyte name_len;
     char map_name[name_len];
     ubyte desc_len;
     char map_description[desc_len];
-    char unknown2[36];
+    uint size_se;
+    uint size_sw;
+    int deathmatch_teams;
+    char unknown2[8] <fgcolor=cDkGray>;
+    int custom_play_kingdoms;
+    char unknown3[4] <fgcolor=cDkGray>;
+    int scenario_deathmatch_kingdoms;
+    char unknown4[4] <fgcolor=cDkGray>;
+    
     
     struct KINGDOM {
-        ubyte is_active;  // 0x01 for active
-        char padding[3];
+        uint is_active;  // 0x01 for active
         ubyte name_len;
         char player_name[name_len];
         char unknown[4];  // Seems to always be null
@@ -91,7 +114,7 @@ struct EDTR_CHUNK {
         char unknown2[12];
     } teams[4] <optimize=false>;
     
-    char unknown3[84];
+    char unknown5[84];
     
     struct PLYR_PROF {
         ubyte name_len;
@@ -102,6 +125,109 @@ struct EDTR_CHUNK {
         byte unknown1[4];
     } players[8] <optimize=false>;
 } EDTR;
+
+offset += EDTR.chunk_length + 8;
+FSeek(offset);
+
+struct MPST_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int null0 <fgcolor = cDkGray>;
+    struct MAP_SIZE {
+        int se;
+        int sw;
+    } size;
+    byte null1[chunk_length + offset + 8 - FTell()] <fgcolor = cDkGray>;  // Map editor data stats, can be safely zeroed
+    
+} MPST;
+
+offset += MPST.chunk_length + 8;
+FSeek(offset);
+
+struct MGRD_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int required <fgcolor=cDkRed>;  // must be 0x0500 0000 
+    typedef struct {
+        BigEndian();
+        uint16 terrain1: 4;
+        uint16 terrain2: 4;
+        uint16 display: 4;
+        uint16 layout: 4;
+        BigEndian();
+    } GRID_TILE <optimize=false>;
+    GRID_TILE tiles[EDTR.size_se*EDTR.size_sw];
+} MGRD;
+
+offset += MGRD.chunk_length + 8;
+FSeek(offset);
+
+struct RADR_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int null <fgcolor=cDkGray>;  // can be anything other than 1 (0-size unit overlay buffer error), doesn't seem to have effect otherwise. Defaults to 2
+} RADR;
+
+offset += RADR.chunk_length + 8;
+FSeek(offset);
+
+struct FTRS_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int load <fgcolor=cDkRed>;  //  must be set to 2, or FTRS chunk is skipped by map editor
+    typedef struct {
+        byte header[2];
+        uint16 index;
+        uint32 editor_id;
+        HOTSPOT pos;
+        BigEndian();
+        short flag;  // 0x092F if no additional data
+        LittleEndian();
+        if (flag == 0x090F) {
+            byte more_data[4] <fgcolor=cDkGray>;  // Can be deleted and feature still works as expected
+        }
+    } FEATURE <comment=FeatureComment>;
+    while (FTell() < offset + chunk_length + 8) {
+        FEATURE features;
+    }
+} FTRS;
+
+string FeatureComment(FEATURE &f) {
+    if (f.index == 0xFFFF) {
+        return "Chunk Padding";
+    }
+    return Str("%s",TYPE.objects[f.index].name);
+}
+
+offset += FTRS.chunk_length + 8;
+FSeek(offset);
+
+struct FIDX_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int count <fgcolor=0x3C8E38>;  // Number of features
+    int feature_sizes[count];  // Size of each feature in bytes
+} FIDX;
+
+offset += FIDX.chunk_length + 8;
+FSeek(offset);
+
+struct CMPG_CHUNK {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+} CMPG;
 
 FSeek(FindFirst("TECH", true, false));
 
@@ -130,7 +256,7 @@ struct TYPE_CHUNK {
         if (write_log) {
             FPrintf(fh, "%s,%i,%i\n", name, type, sub_type);
         }; 
-    } objects[num_objs] <optimize=false>;
+    } objects[num_objs] <optimize=false, comment=Str("%s", this.name)>;
 } TYPE;
 
 FSeek(FindFirst("PLRS", true, false, 0, 0.0, 1, FTell()));
@@ -168,12 +294,11 @@ struct PLRS_CHUNK {
 FSeek(FindFirst("OBJS", true, false, 0, 0.0, 1, FTell()));
 
 typedef struct {
-    byte uk0;  // Always seems to be 24
+    byte uk0;  // 0x24 for building, 0x44 for company
     byte player;  // 0-indexed player number of owner
     uint16 index <comment=Str("%s",TYPE.objects[this].name)>;  // index of object in TYPE list
     uint32 id;  // ID shown in editor
-    float hotspot_se; // center of the sprite along the SE axis
-    float hotspot_sw; // center of the sprite along the SW axis
+    HOTSPOT hotspot;
     char name[20];  // fixed length and null terminated
     byte flag1;
     byte flag2;  // equals 0x0D if structure is at a different HP than specified in INI
@@ -217,6 +342,10 @@ typedef struct {
     
     // the rest of the data is dependent on object type
     switch(TYPE.objects[index].sub_type) {
+        // ruins
+        case 0:
+            char unknown3[13];
+            break;
         // all settlements
         case 1:
         case 5:
