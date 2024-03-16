@@ -19,6 +19,23 @@ if (write_log == true) {
 };
 local uint offset = 12;  // to account for FORM chunk
 
+typedef uint32 BOOL <read=BOOLRead, write=BOOLWrite>;
+
+string BOOLRead( BOOL b ) {
+    if (b) {
+        return "true";
+    }
+    return "false";
+}
+
+void BOOLWrite( BOOL &b, string s ) {
+    if( s == "true" ) {
+        b = (BOOL)1;
+    } else if( s == "false") {
+        b = (BOOL)0;
+    }
+}
+
 typedef struct {
     float se;
     float sw;
@@ -37,27 +54,24 @@ typedef struct {
     TECHNOLOGY known_techs[num_techs];
 } PLYR_TECH <optimize=false>;
     
-struct FORM_CHUNK {
+typedef struct {
     char chunk_name[4];  // Always FORM
     BigEndian();
     int32 length <fgcolor=0x3C8E38>;  //length in bytes from start of HEDR to end of file
     LittleEndian();
     char file_type[4];  // TGSV for .TGM
-} FORM;
+} FORM_CHUNK;
 
-struct HEDR_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
     int required <fgcolor=cDkRed>; // Seems to be 0400 0300 across maps
     char null[4] <fgcolor=cDkGray>; // Can be safely zeroed
-} HEDR;
+} HEDR_CHUNK;
 
-offset += HEDR.chunk_length + 8;
-FSeek(offset);
-
-struct GVER_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -68,12 +82,9 @@ struct GVER_CHUNK {
     char null0[7] <fgcolor=cDkGray>;  // Seems to always be 0x 00 0000 0401 0000
     char game_version[12] <fgcolor=cDkGray>;  // This doesn't seem to be used anywhere, though perhaps prevents outdated games from loading it?
     char null1[chunk_length + start_pos - FTell()] <fgcolor=cDkGray>;
-} GVER;
+} GVER_CHUNK;
 
-offset += GVER.chunk_length + 8;
-FSeek(offset);
-
-struct EDTR_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -124,12 +135,22 @@ struct EDTR_CHUNK {
         uint32 team;  //  0xFFFFFFFF is No Team/Custom
         byte unknown1[4];
     } players[8] <optimize=false>;
-} EDTR;
+    char unknown6[12];
+    float starting_gold;
+    int u1;
+    BOOL use_politics;
+    byte b1;
+    BOOL allow_settlements;
+    BOOL allow_outposts;
+    int max_companies;
+    int max_settlement;
+    int max_outpost;
+    byte padding[28];
+    int allied_victory; // 0: alliance or single; 1: single only; 2: alliance only
+    byte unknown7[50];
+} EDTR_CHUNK;
 
-offset += EDTR.chunk_length + 8;
-FSeek(offset);
-
-struct MPST_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -139,14 +160,10 @@ struct MPST_CHUNK {
         int se;
         int sw;
     } size;
-    byte null1[chunk_length + offset + 8 - FTell()] <fgcolor = cDkGray>;  // Map editor data stats, can be safely zeroed
-    
-} MPST;
+    byte null1[chunk_length - sizeof(null0) - sizeof(size)] <fgcolor = cDkGray>;  // Map editor data stats, can be safely zeroed 
+} MPST_CHUNK;
 
-offset += MPST.chunk_length + 8;
-FSeek(offset);
-
-struct MGRD_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -161,27 +178,22 @@ struct MGRD_CHUNK {
         BigEndian();
     } GRID_TILE <optimize=false>;
     GRID_TILE tiles[EDTR.size_se*EDTR.size_sw];
-} MGRD;
+} MGRD_CHUNK;
 
-offset += MGRD.chunk_length + 8;
-FSeek(offset);
-
-struct RADR_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
     int null <fgcolor=cDkGray>;  // can be anything other than 1 (0-size unit overlay buffer error), doesn't seem to have effect otherwise. Defaults to 2
-} RADR;
+} RADR_CHUNK;
 
-offset += RADR.chunk_length + 8;
-FSeek(offset);
-
-struct FTRS_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
+    local int start_pos = FTell();
     int load <fgcolor=cDkRed>;  //  must be set to 2, or FTRS chunk is skipped by map editor
     typedef struct {
         byte header[2];
@@ -195,10 +207,10 @@ struct FTRS_CHUNK {
             byte more_data[4] <fgcolor=cDkGray>;  // Can be deleted and feature still works as expected
         }
     } FEATURE <comment=FeatureComment>;
-    while (FTell() < offset + chunk_length + 8) {
+    while (FTell() < start_pos + chunk_length) {
         FEATURE features;
     }
-} FTRS;
+} FTRS_CHUNK;
 
 string FeatureComment(FEATURE &f) {
     if (f.index == 0xFFFF) {
@@ -207,42 +219,88 @@ string FeatureComment(FEATURE &f) {
     return Str("%s",TYPE.objects[f.index].name);
 }
 
-offset += FTRS.chunk_length + 8;
-FSeek(offset);
-
-struct FIDX_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
     int count <fgcolor=0x3C8E38>;  // Number of features
     int feature_sizes[count];  // Size of each feature in bytes
-} FIDX;
+} FIDX_CHUNK;
 
-offset += FIDX.chunk_length + 8;
-FSeek(offset);
-
-struct CMPG_CHUNK {
+// Only used in campaign saved games
+typedef struct{
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-} CMPG;
+} CMPG_CHUNK;
 
-FSeek(FindFirst("TECH", true, false));
-
-struct TECH_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
     char padding[4];
     PLYR_TECH player_techs[8];
-} TECH;
+} TECH_CHUNK;
 
-FSeek(FindFirst("TYPE", true, false, 0, 0.0, 1, FTell()));
+typedef struct {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    local int start_pos = FTell();
+    int first_id;
+    int next_id;  // id to be assigned to next object
+    short ids[0x8000];  // 0xFFFF if unused, 0x0000 if used
+    int total_ids;
+    byte obj_flags[start_pos + chunk_length - FTell()];
+} GAME_CHUNK;
 
-struct TYPE_CHUNK {
+typedef struct {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    int32 three;
+    uint32 elapsed_ticks;
+    float tick_rate;
+} SIM_CHUNK;
+
+typedef struct {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    byte data[chunk_length];
+} MMGR_CHUNK;
+
+typedef struct {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    local int start_pos = FTell();
+    int i0;
+    typedef struct {
+        byte name_len;
+        char name[name_len];
+        ushort s1;
+        int i1;
+        int i2;
+        int i3;
+        int i4;
+        int i5;
+        int i6;
+    } HERO;
+    
+    while (start_pos + chunk_length > FTell() + 22) {
+        HERO heroes;
+    }
+} HROS_CHUNK;    
+    
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -257,11 +315,9 @@ struct TYPE_CHUNK {
             FPrintf(fh, "%s,%i,%i\n", name, type, sub_type);
         }; 
     } objects[num_objs] <optimize=false, comment=Str("%s", this.name)>;
-} TYPE;
+} TYPE_CHUNK;
 
-FSeek(FindFirst("PLRS", true, false, 0, 0.0, 1, FTell()));
-
-struct PLRS_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -273,11 +329,18 @@ struct PLRS_CHUNK {
         byte unknown[8];  // always seems to be 0x1400 0000 0F00 0000
         char player_name[15];  // 14 characters and null terminated
         byte faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
-        byte unknown2[12];
+        byte unknown2[7];
+        float starting_gold;
+        int unknown3;
         BigEndian();
-        uint32 sai_len;
+        byte sai_len;
         LittleEndian();
         char sai_name[sai_len];
+        if (player_name == "Independent") {
+            FSeek(start_pos + 4592);
+        } else {
+            FSeek(start_pos+4597);
+        }
         // There is a ton more data after this,
         // and apparently no pointer to the next section
         // so just search for 0x1400 0000 0F00 0000 and pray lol
@@ -287,11 +350,9 @@ struct PLRS_CHUNK {
         //FSeek(FTell() - 4);
         // Players in games that haven't been playen (maps, not save games)
         // are 4597 bytes long. So just jump to the next one
-        FSeek(start_pos+4597);
-    } PLR[8] <optimize=false>;
-} PLRS;
-
-FSeek(FindFirst("OBJS", true, false, 0, 0.0, 1, FTell()));
+        
+    } PLR[9] <optimize=false>;
+} PLRS_CHUNK;
 
 typedef struct {
     byte uk0;  // 0x24 for building, 0x44 for company
@@ -436,10 +497,9 @@ string ObjStatusComment(ubyte &status) {
         default:
             return "Unknow Status";
     }
-}
-            
+}      
 
-struct OBJS_CHUNK {
+typedef struct {
     char chunk_name[4];
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
@@ -449,5 +509,49 @@ struct OBJS_CHUNK {
     while (FTell() < (start_pos + chunk_length - 18)) {
         MAP_OBJ obj;
     }
-} OBJS;           
+} OBJS_CHUNK;
+
+
+typedef struct {
+    char chunk_name[4];
+    BigEndian();
+    uint32 chunk_length <fgcolor=0x3C8E38>;
+    LittleEndian();
+    //char data[chunk_length];
+} PLACEHOLDER_CHUNK;
+
+local uchar chunk_name[4];
+FSeek(0);
+local int start_pos = 0;
+while (!FEof()) {
+    start_pos = FTell();
+    ReadBytes(chunk_name, start_pos, 4);
+    switch(chunk_name) {
+        case "FORM": FORM_CHUNK FORM; FSeek(start_pos + 12); break;
+        case "HEDR": HEDR_CHUNK HEDR; FSeek(start_pos + HEDR.chunk_length + 8); break;
+        case "GVER": GVER_CHUNK GVER; FSeek(start_pos + GVER.chunk_length + 8); break;
+        case "EDTR": EDTR_CHUNK EDTR; FSeek(start_pos + EDTR.chunk_length + 8); break;
+        case "MPST": MPST_CHUNK MPST; FSeek(start_pos + MPST.chunk_length + 8); break;
+        case "MGRD": MGRD_CHUNK MGRD; FSeek(start_pos + MGRD.chunk_length + 8); break;
+        case "RADR": RADR_CHUNK RADR; FSeek(start_pos + RADR.chunk_length + 8); break;
+        case "FTRS": FTRS_CHUNK FTRS; FSeek(start_pos + FTRS.chunk_length + 8); break;
+        case "FIDX": FIDX_CHUNK FIDX; FSeek(start_pos + FIDX.chunk_length + 8); break;
+        case "CMPG": CMPG_CHUNK CMPG; FSeek(start_pos + CMPG.chunk_length + 8); break;
+        case "TECH": TECH_CHUNK TECH; FSeek(start_pos + TECH.chunk_length + 8); break;
+        case "GAME": GAME_CHUNK GAME; FSeek(start_pos + GAME.chunk_length + 8); break;
+        case "SIM ": SIM_CHUNK SIM; FSeek(start_pos + SIM.chunk_length + 8); break;
+        case "MMGR": MMGR_CHUNK MMGR; FSeek(start_pos + MMGR.chunk_length + 8); break;
+        case "TYPE": TYPE_CHUNK TYPE; FSeek(start_pos + TYPE.chunk_length + 8); break;
+        case "HROS": HROS_CHUNK HROS; FSeek(start_pos + HROS.chunk_length + 8); break;
+        case "PLRS": PLRS_CHUNK PLRS; FSeek(start_pos + PLRS.chunk_length + 8); break;
+        case "OBJS": OBJS_CHUNK OBJS; FSeek(start_pos + OBJS.chunk_length + 8); break;
+        
+        default:
+            PLACEHOLDER_CHUNK chunk;
+            FSeek(FTell()+chunk.chunk_length);
+            break;
+    }
+}
+        
+            
     
