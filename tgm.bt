@@ -273,7 +273,7 @@ typedef struct {
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-    byte data[chunk_length];
+    byte null[chunk_length] <fgcolor=cDkGray>;
 } MMGR_CHUNK;
 
 typedef struct {
@@ -326,20 +326,25 @@ typedef struct {
     struct PLR_OBJ {
         local int start_pos = FTell();
         uint32 uknwn;
-        byte unknown[8];  // always seems to be 0x1400 0000 0F00 0000
+        int size0;
+        int size1;
         char player_name[15];  // 14 characters and null terminated
-        byte faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
-        byte unknown2[7];
+        uint32 faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
+        float f1;
         float starting_gold;
         int unknown3;
         BigEndian();
         byte sai_len;
         LittleEndian();
         char sai_name[sai_len];
+        local int size_factor = 0;
+        if (size0 == 0x12) {
+            size_factor = -20;
+        }
         if (player_name == "Independent") {
-            FSeek(start_pos + 4592);
+            byte data[start_pos + 4592 - FTell() + size_factor];
         } else {
-            FSeek(start_pos+4597);
+            byte data[start_pos + 4597 - FTell() + size_factor];
         }
         // There is a ton more data after this,
         // and apparently no pointer to the next section
@@ -355,7 +360,7 @@ typedef struct {
 } PLRS_CHUNK;
 
 typedef struct {
-    byte uk0;  // 0x24 for building, 0x44 for company
+    byte obj_class;  // 0x24 for building, 0x44 for company
     byte player;  // 0-indexed player number of owner
     uint16 index <comment=Str("%s",TYPE.objects[this].name)>;  // index of object in TYPE list
     uint32 id;  // ID shown in editor
@@ -374,11 +379,13 @@ typedef struct {
     uint16 pos_se;
     uint16 pos_sw;
     // Amount currently being produced
-    float net_gold_production <fgcolor=cBlack, bgcolor=0x00DCFC>;
-    float net_stone_production <fgcolor=cYellow, bgcolor=0x707070>;
-    float net_wood_production <fgcolor=cYellow, bgcolor=0x2A578B>;
-    float net_iron_production <fgcolor=cYellow, bgcolor=0x505050>;
-    float net_mana_production <fgcolor=cYellow, bgcolor=0xD27619>;
+    struct RESOURCE_PRODUCTION {
+        float gold <fgcolor=cBlack, bgcolor=0x00DCFC>;
+        float stone <fgcolor=cYellow, bgcolor=0x707070>;
+        float wood <fgcolor=cYellow, bgcolor=0x2A578B>;
+        float iron <fgcolor=cYellow, bgcolor=0x505050>;
+        float mana <fgcolor=cYellow, bgcolor=0xD27619>;
+    } resource_production;
     char unknown2[1];
     float max_hp;
     char unknown0[4];
@@ -414,7 +421,12 @@ typedef struct {
         case 7:
         case 8:
             MILITIA_DATA militia_data;
-            char unknown6[10];
+            // if first byte is not null shorten to 9 rather than 10
+            if (ReadByte() == 0x00) {
+                char unknown6[10];
+            } else {
+                char unknown6[9];
+            }
             
             // each base component is encoded by 1 bit, ordered from highest to lowest:
             // Wall (128), Library (64), Temple (32), Barracks (16), Market (8), Quarry (4), Blacksmith (2), Woodmill (1)
@@ -435,31 +447,83 @@ typedef struct {
             
             char unknown7[4];
             int important0 <fgcolor=cDkRed>;  // Always seems to be 0x00FF FF00, something to do with structure state/status
-            char unknown8[25] <fgcolor=cDkGray>;  // Can be safely zeroed
-            int block_size_1 <fgcolor=0x3C8E38>;
-            char block_1[block_size_1] <fgcolor=cDkGray>; // can be safely zeroed
             
-            int important1;
-            int is_long;  // seems to indicate whether this part is 13 or 20 bytes long
-            if (is_long == 1) {
-                char block_2[12];
-            } else {
-                char block_2[5];
+            // this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
+            local int pad_start = FTell();
+            local uchar b1 = 0;
+            local uchar b2 = 0;
+            
+            while ( !(b1 == 0xA0 && b2 == 0x40) ) {
+                b1 = b2;
+                b2 = ReadByte();
+                FSeek(FTell()+1);
             }
+            
+            local int pad_end = FTell();
+            FSeek(pad_start);
+            byte padding[pad_end - pad_start + 14] <fgcolor=cDkGray>;  // Can be safely zeroed
+            
+            struct BUILDING_MODIFIERS {
+                int size <fgcolor=0x3C8E38>;
+                float group_1_commission_cost;  // Carpentry Guild discount
+                float group_2_commission_cost;  // Armory Guild discount
+                float group_3_commission_cost;  // Masonry Guild discount
+                float group_all_commission_cost;  // Billet discount
+                float militia_av;
+                float militia_dv;
+                float magic_resistance;
+                float non_magic_resistance;  // Wizard Tower bonus
+                float construction_cost;  // Carpentry guild discount
+                if (sizeof(float)*9 < size) {
+                    float khaldunite_resistance;
+                    byte padding[size - sizeof(float)*10];
+                }
+            } building_modifiers;
+            
+            int important1;  // Always seems to be 4
+            int num_modifiers;  // How many modifiers does the building have
+            if (num_modifiers == 0) {
+                char block_2[5];
+            } else {
+                struct GAINED_MODIFIER {
+                    short id;
+                    float value;
+                    byte null;
+                } gained_modifier[num_modifiers];
+                byte unknown;
+                float upgrade_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
+            }
+            
             struct COMPONENT {
                 local float check_cost = ReadFloat();
                 if (check_cost > 1.0) {
-                    float gold_spent <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                    float component_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
                 }        
                 int size <fgcolor=0x3C8E38>;
-                char data[size] <fgcolor=cDkGray>;  // can be safely zeroed
+                
+                local string upgrade_name = ReadString(FTell(), 20);
+                local int name_len = sizeof(upgrade_name)/sizeof(upgrade_name[0]);
+                if ( name_len > 1 ) {
+                    char upgrade[name_len];
+                    char data[size-sizeof(upgrade)] <fgcolor=cDkGray>;  // can be safely zeroed
+                } else {
+                    char data[size] <fgcolor=cDkGray>;  // can be safely zeroed
+                }
+                if ( name_len > 1) {
+                    float upgrade_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                }
             // +1 accounts for adtl blank component block
             } components[component_list.count+1] <optimize=false>;
             break;
         // outposts
         case 2:
             MILITIA_DATA militia_data;
-            char unknown7[6];
+            // Skip null bytes
+            local int pad_len = 0;
+            while (ReadByte(FTell()+pad_len) == 0x0) {
+                pad_len++;
+            }
+            byte padding[pad_len];
             break;
         // lairs
         case 3:
@@ -506,7 +570,7 @@ typedef struct {
     LittleEndian();
     local int start_pos = FTell();
     char unknown[4];
-    while (FTell() < (start_pos + chunk_length - 18)) {
+    while (FTell() < (start_pos + chunk_length - 19)) {
         MAP_OBJ obj;
     }
 } OBJS_CHUNK;
@@ -517,7 +581,7 @@ typedef struct {
     BigEndian();
     uint32 chunk_length <fgcolor=0x3C8E38>;
     LittleEndian();
-    //char data[chunk_length];
+    char data[chunk_length];
 } PLACEHOLDER_CHUNK;
 
 local uchar chunk_name[4];
@@ -548,7 +612,7 @@ while (!FEof()) {
         
         default:
             PLACEHOLDER_CHUNK chunk;
-            FSeek(FTell()+chunk.chunk_length);
+            //FSeek(FTell()+chunk.chunk_length);
             break;
     }
 }
