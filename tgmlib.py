@@ -49,7 +49,11 @@ class tgmFile:
                 (self.desc_len,) = struct.unpack('B', in_fh.read(1))
                 (self.map_description,) = struct.unpack(f'{self.desc_len}s', in_fh.read(self.desc_len))
                 # Skips unknown bytes
-                (self.unknown2,) = struct.unpack('36s', in_fh.read(36))
+                (self.size_se,
+                 self.size_sw,
+                 self.deathmatch_teams,
+                 self.custom_play_kingdoms,
+                 self.scenario_deathmatch_kingdoms,) = struct.unpack('III8xI4xI4x', in_fh.read(36))
                 
                 self.kingdoms = []
                 for i in range(0,8):
@@ -93,6 +97,23 @@ class tgmFile:
                     
                     self.players.append(new_player)
             return
+    class MgrdChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file, EDTR):
+            with open(filename, "rb") as in_fh:
+                # Skip required, fixed int at begining of chunk
+                in_fh.seek(iff.data.children[4].data_offset + 4)
+                print(f'Reading first tile @ {in_fh.tell()}')
+                self.tiles = [self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(EDTR.size_se*EDTR.size_sw)]
+                
+        class GridTile:
+            def __init__(self, terrain, layout):
+                self._terrain = terrain
+                self._layout = layout
+                self.terrain1 = terrain >> 4
+                self.terrain2 = terrain & 15
+                self.display = layout >> 4
+                self.layout = layout & 15
+                
     
     class TypeChunk:
         
@@ -164,7 +185,7 @@ class tgmFile:
                     (self.max_militia,) = struct.unpack('=f', in_fh.read(4))
             
             def __init__(self, in_fh, TYPE):
-                print(f'starting read at {in_fh.tell()}')
+                #print(f'starting read at {in_fh.tell()}')
                 (self.unknown0,
                  self.player,
                  self.index,
@@ -245,8 +266,8 @@ class tgmFile:
                 
                 while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 18):
                             self.objs.append(self.MapObj(in_fh, TYPE))
-                            pprint(vars(self.objs[-1]))   
-                            print('')
+                            #pprint(vars(self.objs[-1]))   
+                            #print('')
                 
                 
     
@@ -257,6 +278,7 @@ class tgmFile:
                 if self.iff.data.formtype != "TGSV":
                     print(f"Error: invalid file type: {self.iff.data.formtype}")
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
+                self.MGRD = self.MgrdChunk(self.filename, self.iff, self.EDTR)
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
                 self.PLRS = self.PlrsChunk(self.filename, self.iff)
                 self.OBJS = self.ObjsChunk(self.filename, self.iff, self.TYPE)
@@ -269,12 +291,13 @@ class tgmFile:
                 
 testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
 testTGM.load()
-for obj in testTGM.TYPE.objs.values():
-    print(obj)
+#for obj in testTGM.TYPE.objs.values():
+#    print(obj)
 
-for obj in testTGM.OBJS.objs:
-    print(obj)
+#for obj in testTGM.OBJS.objs:
+#    print(obj)
 
 print(testTGM.OBJS.objs[30].base_iron_production)
+for child in testTGM.iff.data.children: print(f'{child.type}')
 
 
