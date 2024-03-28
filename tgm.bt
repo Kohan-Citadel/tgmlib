@@ -19,6 +19,8 @@ if (write_log == true) {
 };
 local uint offset = 12;  // to account for FORM chunk
 
+string TypeLookup(uint16 &index);
+
 typedef uint32 BOOL <read=BOOLRead, write=BOOLWrite>;
 
 string BOOLRead( BOOL b ) {
@@ -36,10 +38,25 @@ void BOOLWrite( BOOL &b, string s ) {
     }
 }
 
+typedef float MS <read=MSRead, write=MSWrite>;
+
+string MSRead( MS ms) {
+    return Str("%i", ms*14);
+}
+
+void MSWrite( MS &ms, string s ) {
+    ms = (MS)(Atof(s) / 14.0f);
+}
+
 typedef struct {
     float se;
     float sw;
 } HOTSPOT;
+
+typedef struct {
+    uint16 pos_se;
+    uint16 pos_sw;
+} POSITION;
 
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
@@ -360,189 +377,435 @@ typedef struct {
 } PLRS_CHUNK;
 
 typedef struct {
-    byte obj_class;  // 0x24 for building, 0x44 for company
-    byte player;  // 0-indexed player number of owner
-    uint16 index <comment=Str("%s",TYPE.objects[this].name)>;  // index of object in TYPE list
-    uint32 id;  // ID shown in editor
-    HOTSPOT hotspot;
-    char name[20];  // fixed length and null terminated
-    byte flag1;
-    byte flag2;  // equals 0x0D if structure is at a different HP than specified in INI
-    if (flag2 == 13) {
-        float current_hp;
-    } else if (flag2 == 7) {  // 0x07 for spider lair in bonehenge
-        byte unknown_data;
+    typedef struct {
+        byte obj_class;  // 0x24 for building, 0x44 for company
+        byte player;  // 0-indexed player number of owner
+        uint16 index <comment=TypeLookup>;  // index of object in TYPE list
+        uint32 id;  // ID shown in editor
+        HOTSPOT hotspot;
+    } OBJ_HEDR;
+    
+    OBJ_HEDR header;
+    
+    struct BUILDING;
+    struct COMPANY;
+    
+    switch (header.obj_class) {
+        case 0x24:
+            BUILDING building_data;
+            break;
+        case 0x3C:
+            COMPANY company_data;
+            break;
     }
-    char unknown1[12];
-    ubyte status <comment=ObjStatusComment>;
-    float uk1;
-    uint16 pos_se;
-    uint16 pos_sw;
-    // Amount currently being produced
-    struct RESOURCE_PRODUCTION {
-        float gold <fgcolor=cBlack, bgcolor=0x00DCFC>;
-        float stone <fgcolor=cYellow, bgcolor=0x707070>;
-        float wood <fgcolor=cYellow, bgcolor=0x2A578B>;
-        float iron <fgcolor=cYellow, bgcolor=0x505050>;
-        float mana <fgcolor=cYellow, bgcolor=0xD27619>;
-    } resource_production;
-    char unknown2[1];
-    float max_hp;
-    char unknown0[4];
-    float booty_value;
     
     typedef struct {
-        char padding[5];
-        float supply_zone;
-        char unknown3[8];
-        float militia_curr;
-        float militia_regen;
-        char unknown4[9];
-        float guard_zone;
-        char unknown5[5];
-        uint16 militia_front <comment=Str("%s",TYPE.objects[this].name)>;
-        uint16 militia_support <comment=Str("%s",TYPE.objects[this].name)>;
-        byte company_size;
-        byte name_len;
-        char company_name[name_len];
-        float militia_max;
-    } MILITIA_DATA;
-    
-    // the rest of the data is dependent on object type
-    switch(TYPE.objects[index].sub_type) {
-        // ruins
-        case 0:
-            char unknown3[13];
-            break;
-        // all settlements
-        case 1:
-        case 5:
-        case 6:
-        case 7:
-        case 8:
-            MILITIA_DATA militia_data;
-            // if first byte is not null shorten to 9 rather than 10
-            if (ReadByte() == 0x00) {
-                char unknown6[10];
-            } else {
-                char unknown6[9];
-            }
-            
-            // each base component is encoded by 1 bit, ordered from highest to lowest:
-            // Wall (128), Library (64), Temple (32), Barracks (16), Market (8), Quarry (4), Blacksmith (2), Woodmill (1)
-            struct COMP_LIST {
-                BigEndian();
-                int wall: 1;
-                int library: 1;
-                int temple: 1;
-                int barracks: 1;
-                int market: 1;
-                int quarry: 1;
-                int blacksmith: 1;
-                int woodmill: 1;
-                LittleEndian();
-                
-                local int count = wall + library + temple + barracks + market + quarry + blacksmith + woodmill;
-            } component_list;
-            
-            char unknown7[4];
-            int important0 <fgcolor=cDkRed>;  // Always seems to be 0x00FF FF00, something to do with structure state/status
-            
-            // this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
-            local int pad_start = FTell();
-            local uchar b1 = 0;
-            local uchar b2 = 0;
-            
-            while ( !(b1 == 0xA0 && b2 == 0x40) ) {
-                b1 = b2;
-                b2 = ReadByte();
-                FSeek(FTell()+1);
-            }
-            
-            local int pad_end = FTell();
-            FSeek(pad_start);
-            byte padding[pad_end - pad_start + 14] <fgcolor=cDkGray>;  // Can be safely zeroed
-            
-            struct BUILDING_MODIFIERS {
-                int size <fgcolor=0x3C8E38>;
-                float group_1_commission_cost;  // Carpentry Guild discount
-                float group_2_commission_cost;  // Armory Guild discount
-                float group_3_commission_cost;  // Masonry Guild discount
-                float group_all_commission_cost;  // Billet discount
-                float militia_av;
-                float militia_dv;
-                float magic_resistance;
-                float non_magic_resistance;  // Wizard Tower bonus
-                float construction_cost;  // Carpentry guild discount
-                if (sizeof(float)*9 < size) {
-                    float khaldunite_resistance;
-                    byte padding[size - sizeof(float)*10];
-                }
-            } building_modifiers;
-            
-            int important1;  // Always seems to be 4
-            int num_modifiers;  // How many modifiers does the building have
-            if (num_modifiers == 0) {
-                char block_2[5];
-            } else {
-                struct GAINED_MODIFIER {
-                    short id;
-                    float value;
-                    byte null;
-                } gained_modifier[num_modifiers];
-                byte unknown;
-                float upgrade_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
-            }
-            
-            struct COMPONENT {
-                local float check_cost = ReadFloat();
-                if (check_cost > 1.0) {
-                    float component_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
-                }        
-                int size <fgcolor=0x3C8E38>;
-                
-                local string upgrade_name = ReadString(FTell(), 20);
-                local int name_len = sizeof(upgrade_name)/sizeof(upgrade_name[0]);
-                if ( name_len > 1 ) {
-                    char upgrade[name_len];
-                    char data[size-sizeof(upgrade)] <fgcolor=cDkGray>;  // can be safely zeroed
+        char name[20];  // fixed length and null terminated
+        byte flag1;
+        byte flag2;  // equals 0x0D if structure is at a different HP than specified in INI
+        if (flag2 == 13) {
+            float current_hp;
+        } else if (flag2 == 7) {  // 0x07 for spider lair in bonehenge
+            byte unknown_data;
+        }
+        char unknown1[12];
+        ubyte status <comment=ObjStatusComment>;
+        float uk1;
+        POSITION position;
+        // Amount currently being produced
+        struct RESOURCE_PRODUCTION {
+            float gold <fgcolor=cBlack, bgcolor=0x00DCFC>;
+            float stone <fgcolor=cYellow, bgcolor=0x707070>;
+            float wood <fgcolor=cYellow, bgcolor=0x2A578B>;
+            float iron <fgcolor=cYellow, bgcolor=0x505050>;
+            float mana <fgcolor=cYellow, bgcolor=0xD27619>;
+        } resource_production;
+        char unknown2[1];
+        float max_hp;
+        char unknown0[4];
+        float booty_value;
+        
+        typedef struct {
+            char padding[5];
+            float supply_zone;
+            char unknown3[8];
+            float militia_curr;
+            float militia_regen;
+            char unknown4[9];
+            float guard_zone;
+            char unknown5[5];
+            uint16 militia_front <comment=TypeLookup>;
+            uint16 militia_support <comment=TypeLookup>;
+            byte company_size;
+            byte name_len;
+            char company_name[name_len];
+            float militia_max;
+        } MILITIA_DATA;
+        
+        // the rest of the data is dependent on object type
+        switch(TYPE.objects[header.index].sub_type) {
+            // ruins
+            case 0:
+                char unknown3[13];
+                break;
+            // all settlements
+            case 1:
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                MILITIA_DATA militia_data;
+                // if first byte is not null shorten to 9 rather than 10
+                if (ReadByte() == 0x00) {
+                    char unknown6[10];
                 } else {
-                    char data[size] <fgcolor=cDkGray>;  // can be safely zeroed
+                    char unknown6[9];
                 }
-                if ( name_len > 1) {
+                
+                // each base component is encoded by 1 bit, ordered from highest to lowest:
+                // Wall (128), Library (64), Temple (32), Barracks (16), Market (8), Quarry (4), Blacksmith (2), Woodmill (1)
+                struct COMP_LIST {
+                    BigEndian();
+                    int wall: 1;
+                    int library: 1;
+                    int temple: 1;
+                    int barracks: 1;
+                    int market: 1;
+                    int quarry: 1;
+                    int blacksmith: 1;
+                    int woodmill: 1;
+                    LittleEndian();
+                    
+                    local int count = wall + library + temple + barracks + market + quarry + blacksmith + woodmill;
+                } component_list;
+                
+                char unknown7[4];
+                int important0 <fgcolor=cDkRed>;  // Always seems to be 0x00FF FF00, something to do with structure state/status
+                
+                // this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
+                local int pad_start = FTell();
+                local uchar b1 = 0;
+                local uchar b2 = 0;
+                
+                while ( !(b1 == 0xA0 && b2 == 0x40) ) {
+                    b1 = b2;
+                    b2 = ReadByte();
+                    FSeek(FTell()+1);
+                }
+                
+                local int pad_end = FTell();
+                FSeek(pad_start);
+                byte padding[pad_end - pad_start + 14] <fgcolor=cDkGray>;  // Can be safely zeroed
+                
+                struct BUILDING_MODIFIERS {
+                    int size <fgcolor=0x3C8E38>;
+                    float group_1_commission_cost;  // Carpentry Guild discount
+                    float group_2_commission_cost;  // Armory Guild discount
+                    float group_3_commission_cost;  // Masonry Guild discount
+                    float group_all_commission_cost;  // Billet discount
+                    float militia_av;
+                    float militia_dv;
+                    float magic_resistance;
+                    float non_magic_resistance;  // Wizard Tower bonus
+                    float construction_cost;  // Carpentry guild discount
+                    if (sizeof(float)*9 < size) {
+                        float khaldunite_resistance;
+                        byte padding[size - sizeof(float)*10];
+                    }
+                } building_modifiers;
+                
+                int important1;  // Always seems to be 4
+                int num_modifiers;  // How many modifiers does the building have
+                if (num_modifiers == 0) {
+                    char block_2[5];
+                } else {
+                    struct GAINED_MODIFIER {
+                        short id;
+                        float value;
+                        byte null;
+                    } gained_modifier[num_modifiers];
+                    byte unknown;
                     float upgrade_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
                 }
-            // +1 accounts for adtl blank component block
-            } components[component_list.count+1] <optimize=false>;
-            break;
-        // outposts
-        case 2:
-            MILITIA_DATA militia_data;
-            // Skip null bytes
-            local int pad_len = 0;
-            while (ReadByte(FTell()+pad_len) == 0x0) {
-                pad_len++;
-            }
-            byte padding[pad_len];
-            break;
-        // lairs
-        case 3:
-            MILITIA_DATA militia_data;
-            char unknown5[17];
-            break;
-        // mines
-        case 4:
-            char unknown7[26];
-            // structure base amount
-            float gold_production <fgcolor=cBlack, bgcolor=0x00DCFC>;
-            float stone_production <fgcolor=cYellow, bgcolor=0x707070>;
-            float wood_production <fgcolor=cYellow, bgcolor=0x2A578B>;
-            float iron_production <fgcolor=cYellow, bgcolor=0x505050>;
-            float mana_production <fgcolor=cYellow, bgcolor=0xD27619>;
-            break;
-        };
+                
+                struct COMPONENT {
+                    local float check_cost = ReadFloat();
+                    if (check_cost > 1.0) {
+                        float component_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                    }        
+                    int size <fgcolor=0x3C8E38>;
+                    
+                    local string upgrade_name = ReadString(FTell(), 20);
+                    local int name_len = sizeof(upgrade_name)/sizeof(upgrade_name[0]);
+                    if ( name_len > 1 ) {
+                        char upgrade[name_len];
+                        char data[size-sizeof(upgrade)] <fgcolor=cDkGray>;  // can be safely zeroed
+                    } else {
+                        char data[size] <fgcolor=cDkGray>;  // can be safely zeroed
+                    }
+                    if ( name_len > 1) {
+                        float upgrade_cost <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                    }
+                // +1 accounts for adtl blank component block
+                } components[component_list.count+1] <optimize=false>;
+                break;
+            // outposts
+            case 2:
+                MILITIA_DATA militia_data;
+                // Skip null bytes
+                local int pad_len = 0;
+                while (ReadByte(FTell()+pad_len) == 0x0) {
+                    pad_len++;
+                }
+                byte padding[pad_len];
+                break;
+            // lairs
+            case 3:
+                MILITIA_DATA militia_data;
+                char unknown5[17];
+                break;
+            // mines
+            case 4:
+                char unknown7[26];
+                // structure base amount
+                float gold_production <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                float stone_production <fgcolor=cYellow, bgcolor=0x707070>;
+                float wood_production <fgcolor=cYellow, bgcolor=0x2A578B>;
+                float iron_production <fgcolor=cYellow, bgcolor=0x505050>;
+                float mana_production <fgcolor=cYellow, bgcolor=0xD27619>;
+                break;
+        }
+    } BUILDING;
+    
+    typedef struct {
+        local int start_pos = FTell();
+        uint16 captain_index <comment=TypeLookup>;
+        uint16 front_index <comment=TypeLookup>;
+        uint16 support1_index <comment=TypeLookup>;
+        uint16 support2_index <comment=TypeLookup>;
+        ubyte b1;
+        ubyte b2;
+        ubyte b3;
+        ubyte b4;
+        char name[22];
+        FSeek(start_pos+46);
+        float control_zone;
+        FSeek(start_pos+62);
+        struct UPKEEP {
+            float stone <fgcolor=cYellow, bgcolor=0x707070>;
+            float wood <fgcolor=cYellow, bgcolor=0x2A578B>;
+            float iron <fgcolor=cYellow, bgcolor=0x505050>;
+            float mana <fgcolor=cYellow, bgcolor=0xD27619>;
+        } upkeep;
+        FSeek(start_pos+78);
+        float speed <comment=Str("%i MS", this*14)>;  // company MS in tiles per second. A value of 1 equals 14MS
+        
+        float f0;
+        float f1;
+        float attack_efficiency;  // Current attack efficiency
+        float formation_atk_mod;  // Formation attack modifier
+        float f4;
 
-} MAP_OBJ <optimize=false,comment=Str("%s, %i %i", TYPE.objects[this.index].name, TYPE.objects[this.index].type, TYPE.objects[this.index].sub_type)>;
+        float experience;
+        FSeek(start_pos+119);
+        struct MORALE {
+            float current;
+            float max;
+        } morale;
+        FSeek(FTell()+16);
+        float zone_of_control;
+        FSeek(start_pos+256+58);
+        //FindFirst
+        HOTSPOT unit_positions[6];
+        int null;
+        local int64 mods_start = FindFirst("0000000004000000,h", true, false, 0, 0.0, 1, start_pos+200);
+        FSeek(mods_start+4);
+        struct COMP_MODS_PROVIDED {
+            int start <hidden=true>;
+            int num_modifiers;
+            local int i;
+            for( i = 0; i < num_modifiers; i++ ) {
+                short key <hidden=true>;
+                switch (key) {
+                    case 0x24: float resupply_rate_bonus; break;
+                    case 0x25: float zone_of_control_bonus; break;
+                    case 0x26: float morale_bonus; break;            
+                    case 0x27: float morale_loss_rate_bonus; break;
+                    case 0x28: float morale_recovery_rate_bonus; break;
+                    case 0x29: float morale_check_bonus; break;
+                    case 0x2A: float visual_range_bonus; break;
+                    case 0x2B: float entrenchment_rate_bonus; break;
+                }
+                byte padding <hidden=true>;
+            }
+        } company_modifiers_provided;
+        
+        struct UNIT_MODS_PROVIDED {
+            int start <hidden=true>;
+            int num_modifiers;
+            local int i;
+            for( i = 0; i < num_modifiers; i++ ) {
+                short key <hidden=true, format=hex>;
+                switch (key) {
+                    case 0x01: float attack_bonus_to_any; break;
+                    case 0x02: float attack_bonus_to_mounted; break;
+                    case 0x03: float hit_points_bonus; break;
+                    case 0x04: float attack_bonus_to_shadow; break;
+                    case 0x05: float attack_bonus_to_building; break;
+                    case 0x06: float attack_bonus_to_archer; break;
+                    case 0x07: float attack_bonus_to_routed; break;
+                    case 0x08: float defense_bonus_vs_any; break;
+                    case 0x09: float defense_bonus_vs_mounted; break;
+                    case 0x0A: float unknown <fgcolor=cRed>; break;
+                    case 0x0B: float defense_bonus_vs_shadow; break;
+                    case 0x0C: float defense_bonus_vs_archer; break;
+                    case 0x0D: float was_damage_bonus_to_shadow; break;
+                    case 0x0E: float damage_bonus_to_any; break;
+                    case 0x0F: float was_damage_bonus_to_mounted; break;
+                    case 0x10: float ignore_terrain_bonus; break;
+                    case 0x11: float attack_bonus_to_nonshadow; break;
+                    case 0x12: float reload_time_bonus; break;
+                    case 0x13: float damage_taken_from_magic; break;
+                    case 0x14: float damage_taken_from_non_magic; break;
+                    case 0x15: float damage_taken_from_ranged; break;
+                    case 0x16: float damage_taken_from_melee; break;
+                    case 0x17: float damage_taken_from_any; break;
+                    case 0x18: float reverse_damage_when_hit; break;
+                    case 0x19: float movement_bonus; break;
+                    case 0x1A: float paralyze_bonus; break;
+                    case 0x1B: float entangle_bonus; break;
+                    case 0x1C: float damage_taken_from_holy; break;
+                    case 0x1D: float damage_taken_from_unholy; break;
+                    case 0x1E: float damage_taken_from_khaldunite; break;
+                    case 0x1F: float immunity_to_enchantment; break;
+                    case 0x20: float melee_holy_damage; break;
+                    case 0x21: float melee_unholy_damage; break;
+                    case 0x22: float cause_khaldunite_damage; break;
+                    case 0x23: float cause_magic_damage; break;
+                    default:
+                        float unknown_mod <fgcolor=cRed>;
+                        break;
+                }
+                byte padding <hidden=true>;
+            }
+            int padding <hidden=true>;     
+        } unit_modifiers_provided;
+        
+        struct ALL_COMP_MODS {
+            int start[2];
+            float resupply_rate_bonus;
+            float zone_of_control_bonus;
+            float morale_bonus;
+            float morale_loss_rate_bonus;
+            float morale_recovery_rate_bonus;
+            float morale_check_bonus;
+            float visual_range_bonus;
+            float entrenchment_rate_bonus;
+            float unknown;
+        } all_company_modifiers;
+        
+        //FSeek(start_pos+371-51+119);
+        local int64 unit_start = FindFirst("00000000100,h", true, false, 0, 0.0, 1, start_pos+200);
+        FSeek(unit_start-1);
+        int num_units;
+        struct UNIT {
+            local int start_pos = FTell();
+            byte unit_index;  // 0 is Captain, 5 is 1st support, 6 is 2nd support
+            OBJ_HEDR header;
+            byte flag1;
+            byte flag2;  // equals 0x0D if at a different HP than specified in INI
+            switch (flag2) {
+                case 0x09:
+                    float current_hp;
+                    short unknown;
+                    start_pos += 6;
+                    break;
+                case 0x0B:
+                    short unknown;
+                    start_pos += 2;
+                    break;
+                case 0x0D:
+                    float current_hp;
+                    start_pos += 4;
+                    break;
+            }
+            FSeek(start_pos+67-24);
+            POSITION position <fgcolor=cBlue>;
+            float floats[5];
+            MS current_speed <fgcolor=cBlue>;
+            FSeek(start_pos+121-8);
+            struct MOD_GAINED {
+                int start <hidden=true>;
+                int size <fgcolor=0x3C8E38>;
+                float attack_bonus_to_any <fgcolor=cBlue>;
+                float attack_bonus_to_mounted <fgcolor=cBlue>;
+                float uk0 <fgcolor=cRed>;
+                float attack_bonus_to_shadow <fgcolor=cBlue>;
+                float attack_bonus_to_building <fgcolor=cBlue>;
+                float attack_bonus_to_archer <fgcolor=cBlue>;
+                float attack_bonus_to_routed <fgcolor=cBlue>;
+                float defense_bonus_vs_any <fgcolor=cBlue>;
+                float defense_bonus_vs_mounted <fgcolor=cBlue>;
+                float uk1 <fgcolor=cRed>; 
+                float defense_bonus_vs_shadow <fgcolor=cBlue>;
+                float defense_bonus_vs_archer <fgcolor=cBlue>;
+                float was_damage_bonus_to_shadow <fgcolor=cBlue>;
+                float damage_bonus_to_any <fgcolor=cBlue>;
+                float was_damage_bonus_to_mounted <fgcolor=cBlue>;
+                float uk2 <fgcolor=cRed>;
+                float attack_bonus_to_nonshadow <fgcolor=cBlue>;
+                float reload_time_bonus <fgcolor=cBlue>;
+                float damage_taken_from_magic <fgcolor=cBlue>;
+                float damage_taken_from_non_magic <fgcolor=cBlue>;
+                float damage_taken_from_ranged <fgcolor=cBlue>;
+                float damage_taken_from_melee <fgcolor=cBlue>;
+                float damage_taken_from_any <fgcolor=cBlue>;
+                float reverse_damage_when_hit <fgcolor=cBlue>;
+                float damage_taken_from_holy <fgcolor=cBlue>;
+                float damage_taken_from_unholy <fgcolor=cBlue>;
+                float damage_taken_from_khaldunite <fgcolor=cBlue>;
+                float immunity_to_enchantment <fgcolor=cBlue>;
+                float melee_holy_damage <fgcolor=cBlue>;
+                float melee_unholy_damage <fgcolor=cBlue>;
+                float cause_khaldunite_damage <fgcolor=cBlue>;
+                float cause_magic_damage <fgcolor=cBlue>;
+            } modifiers_gained;
+            
+            int null1;
+            float f0;
+            FSeek(FTell()+32);
+            HOTSPOT hotspot <fgcolor=cBlue>;
+            float f3;
+            float f4;
+            MS base_speed <fgcolor=cBlue>;
+            FSeek(FindFirst("0040400000000001,h", true, false, 0, 0.0, 1, FTell()) + 8);
+            float max_hp <fgcolor=cBlue>;
+            
+            switch (TYPE.objects[header.index].sub_type) {
+                case 1:
+                    FSeek(FTell()+4);
+                    float mana;
+                    FSeek(FTell()+5);
+                    break;
+                case 2:
+                    FSeek(FTell()+4);
+                    float mana;
+                    FSeek(FTell()+9);
+                    break;
+            }
+
+        } units[num_units] <optimize=false>;
+        
+        float f11;
+        float detection_zone;
+        FSeek(FTell()+9);
+        float f12;
+        float f13;
+        
+        
+    } COMPANY;
+    
+} MAP_OBJ <optimize=false,comment=Str("%s, %i %i", TYPE.objects[this.header.index].name, TYPE.objects[this.header.index].type, TYPE.objects[this.header.index].sub_type)>;
 
 string ObjStatusComment(ubyte &status) {
     switch(status) {
@@ -615,6 +878,13 @@ while (!FEof()) {
             //FSeek(FTell()+chunk.chunk_length);
             break;
     }
+}
+
+string TypeLookup(uint16 &index) {
+    if (index == 0xFFFF) {
+        return "Empty";
+    }
+    return Str("%s",TYPE.objects[index].name);
 }
         
             
