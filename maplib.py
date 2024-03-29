@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 import math
 from PIL import Image
+import shutil
 import tgrtool
 #class UnitModifiers(Enum):
 class CompanyFormations(Enum):
@@ -31,15 +32,60 @@ class Position:
         return Position(se=self.se, sw=self.sw)
     
     def to_pixels(self, size: int):
-        self.x = int(35.77709 * (self.se * math.cos(-26.57*math.pi/180) + self.sw * math.cos(206.57*math.pi/180)) + (size/2 - 0.5) * 64)
-        self.y = int(35.77709 * (self.se * math.sin(26.57*math.pi/180) + self.sw * math.sin(-206.57*math.pi/180)))
-    
+        axis_angle = math.atan2(16, 32)
+        axis_scaling = 32/math.cos(axis_angle)
+        self.x = round(axis_scaling * (self.se * math.cos(axis_angle) + self.sw * math.cos(math.pi - axis_angle)) + (size/2) * 64)
+        self.y = round(axis_scaling * (self.se * math.sin(axis_angle) + self.sw * math.sin(math.pi - axis_angle)))
+        
     def __str__(self):
         out = f'map coordinates: ({self.se}, {self.sw})'
         if hasattr(self, 'x'):
             out += f' pixel coordinate: ({self.x}, {self.y})'
         return out
+
+class SpriteCache:
+    def __init__(self):
+        self.cache = {}
+        self.cache_path = Path('./Art/Cache')
         
+    def fetch(self, name):
+        if name not in self.cache.keys():    
+            self.load(name)
+        return self.cache[name]
+        
+    def load(self, name):
+        sprite_ini = ConfigParser()
+        ini_name = '-'.join(name.split(sep="-")[:2])+'.ini'
+        try:
+            sprite_ini.read(self.cache_path/ini_name)
+            hsx = int(sprite_ini['HotSpot']['X'])
+            hsy = int(sprite_ini['HotSpot']['Y'])
+            self.cache[name] = [Image.open(self.cache_path/name),(hsx,hsy)]
+        except:
+            match name.split(sep='-')[0]:
+                case 'banner':
+                    src = self.cache_path/('-'.join(name.split(sep="-")[:3])+'.png')
+                    sprite = Image.open(src)
+                    icon = Image.open(self.cache_path/f'icon-{name.split(sep="-")[3]}.png')
+                    sprite.paste(icon,mask=icon)
+                case 'unit':
+                    dest = self.cache_path/'extracted'
+                    src = Path(f'./Art/Objects/Units/{name.split(sep="-")[1]}.tgr')
+                    args = tgrtool.main_parse.parse_args(['unpack', str(src), '--single-frame', '0', '-c', name.split(sep='-')[2], '-o', str(dest)])
+                    args.func(args)
+                    shutil.copy(dest/'fram_0000.png', self.cache_path/name)
+                    shutil.copy(dest/'sprite.ini', self.cache_path/ini_name)
+                    sprite = Image.open(self.cache_path/name)
+            
+            sprite_ini.read(self.cache_path/ini_name)
+            hsx = int(sprite_ini['HotSpot']['X'])
+            hsy = int(sprite_ini['HotSpot']['Y'])
+            self.cache[name] = [sprite,(hsx,hsy)]
+                    
+                    
+cache = SpriteCache()
+            
+
 
 class KohanMap:
     def __init__(self, size: int):
@@ -50,6 +96,16 @@ class KohanMap:
         # Use editor ID as key for lookup
         self.objects = {}
         self.features = {}
+        self.players = [
+            'council',
+            'ceyah',
+            'royalist',
+            'nationalist,',
+            'council',
+            'council',
+            'council',
+            'council',
+        ]
     
     def get_next_id(self):
         self.last_id += 1
@@ -59,25 +115,16 @@ class KohanMap:
         self.size_x = self.size * 64
         self.size_y = self.size * 32
         rendered_map = Image.new('RGBA', (self.size_x, self.size_y), color=(0,0,0,0))
-        ct = 0
         for cell in self.terrain.cells:
-            cell.position.to_pixels(self.size)
-            #print(cell.position.x, cell.position.y)
-            if (ct // self.size) % 2 == 0:
-                if ct % 2:
-                    cell_img = Image.open(Path('../tile-imgs/0x2_border.png'))
-                else:
-                    cell_img = Image.open(Path('../tile-imgs/0x2_border2.png'))
-            else:
-                if ct % 2:
-                    cell_img = Image.open(Path('../tile-imgs/0x2_border2.png'))
-                else:
-                    cell_img = Image.open(Path('../tile-imgs/0x2_border.png'))
-                    
-            rendered_map.paste(cell_img, (cell.position.x, cell.position.y, cell.position.x+64, cell.position.y+32), cell_img)
-            ct+=1
+            sprite, box = cell.fetch_sprite(self.size)
+            rendered_map.paste(sprite, box, sprite)
+
         for obj in self.objects.values():
-            sprite, box = obj.fetch_sprite()
+            obj.position.to_pixels(self.size)
+            sprite, (hsx, hsy) = cache.fetch(obj.sprite)
+            box = (obj.position.x - hsx, obj.position.y - hsy, obj.position.x + sprite.size[0] - hsx, obj.position.y + sprite.size[1] - hsy)
+            
+            
             rendered_map.paste(sprite,box=box,mask=sprite)
             
         rendered_map.show()
@@ -99,11 +146,18 @@ class GridCell:
         self.layout = 0
         self.objects = [] # list of refs to objects occupying this tile
         self.features = [] # list of refs to features occupying this tile
+    
+    def fetch_sprite(self, size):
+        self.position.to_pixels(size)
+        cell_img = Image.open(Path('../tile-imgs/0x2.png'))
+        hsx, hsy = (32, 0)
+        box = (self.position.x - hsx, self.position.y - hsy)
+        return (cell_img, box)
 
 class MapObject:
     '''A class representing an Object in a Kohan map.
     This can be either a Building or a Company.'''
-    def __init__(self, Map: KohanMap, position: Position=Position(0,0), player: int=0):
+    def __init__(self, Map: KohanMap, position: Position=Position(0,0), player: int=1):
         self.Map = Map
         self.id = self.Map.get_next_id()
         Map.objects[self.id] = self
@@ -120,7 +174,7 @@ class Company(MapObject):
     '''A class representing a Company Object in a Kohan map.
     Contains a list of Unit objects.
     This inherits from MapObject.'''
-    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, player: int=0, formation: CompanyFormations=CompanyFormations.SKIRMISH):
+    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, player: int=1, formation: CompanyFormations=CompanyFormations.SKIRMISH):
         MapObject.__init__(self, Map, position=position, player=player)
         self.units = []
         self.units.append(Unit(captain, Map, self, self.player))
@@ -134,12 +188,13 @@ class Company(MapObject):
         self.current_morale = self.max_morale
         self.banner_icon = self.units[1].banner_frame
         self.formation = formation
+        self.sprite = f'banner-{self.Map.players[self.player]}-{self.player}-{self.banner_icon:02}-.png'
     
     def place_units(self, heading=0):
         '''Sets unit positions relative to company position, using a layout based on formation.
         heading is counterclockwise rotation from east in degrees.'''
         formations = {
-            CompanyFormations.COMBAT.value: [(0.5,-1.5), (1.5,-0.5), (-0.5,-2.5), (2.5,-0.5), (-1,-1.5), (1.5,1)],
+            CompanyFormations.COMBAT.value: [(0.5,-1.5), (1.5,-0.5), (-0.5,-2.5), (2.5,0.5), (-1,-1.5), (1.5,1)],
             CompanyFormations.SKIRMISH.value: [(0.5,-1.5), (1.5,-0.5), (-1.5,0.5), (-0.5,1.5), (-1.5,-1.5), (1.5,1.5)],
             CompanyFormations.COLUMN.value: [(1.2,-1.2), (1.8,-1.8), (-1.2,1.2), (-1.8,1.8), (0.6,-0.6), (-0.6,0.6)],
             CompanyFormations.PRESSED.value: [(1.2,-1.2), (1.8,-1.8), (-1.2,1.2), (-1.8,1.8), (0.6,-0.6), (-0.6,0.6)],
@@ -180,7 +235,7 @@ class Company(MapObject):
 class Unit(MapObject):
     '''Class representing a single unit in a Company Object.
     Data is loaded from the cooresponding unit INI.'''
-    def __init__(self, name: str, Map: KohanMap, parent: Company, player: int=0):
+    def __init__(self, name: str, Map: KohanMap, parent: Company, player: int=1):
         MapObject.__init__(self, Map, player=player)
         self.parent = parent
         self.name = name
@@ -190,7 +245,7 @@ class Unit(MapObject):
             unit_ini.read(filepath)
             self.display_name = unit_ini['ObjectData']['ProperName']
             self.unit_class = int(unit_ini['ObjectData']['Class'])
-            self.sprite_path = f"./Art/Objects/{unit_ini['ObjectData']['Sprite']}"
+            self.sprite = f"unit-{Path(unit_ini['ObjectData']['Sprite']).stem}-{self.player}-.png"
             self.max_hp = float(unit_ini['ObjectData']['MaxHitPoints'])
             self.current_hp = self.max_hp
             
@@ -211,7 +266,7 @@ class Unit(MapObject):
             
             if self.unit_type == 'FRONT':
                 self.default_captain = unit_ini['UnitData']['Captain']
-                self.banner_frame = unit_ini['UnitData']['BannerFrame']
+                self.banner_frame = int(unit_ini['UnitData']['BannerFrame'])
                 self.morale = unit_ini['CompanyData']['Morale']
                 self.visual_range = unit_ini['CompanyData']['VisualRange']
                 self.control_zone = unit_ini['CompanyData']['ControlZone']
