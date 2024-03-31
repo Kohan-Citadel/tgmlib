@@ -6,7 +6,7 @@ from configparser import ConfigParser
 import re
 from pathlib import Path
 import math
-from PIL import Image
+from PIL import Image, ImageQt
 import shutil
 import tgrtool
 #class UnitModifiers(Enum):
@@ -124,10 +124,8 @@ class KohanMap:
             sprite, (hsx, hsy) = cache.fetch(obj.sprite)
             box = (obj.position.x - hsx, obj.position.y - hsy, obj.position.x + sprite.size[0] - hsx, obj.position.y + sprite.size[1] - hsy)
             
-            
             rendered_map.paste(sprite,box=box,mask=sprite)
-            
-        rendered_map.show()
+            rendered_map.save('Data/render.png')
     
 
 class MapGrid:
@@ -163,6 +161,7 @@ class MapObject:
         Map.objects[self.id] = self
         self.position = position.copy()
         self.player = player
+        self.display_name = ''
         
 
 class Building(MapObject):
@@ -174,7 +173,7 @@ class Company(MapObject):
     '''A class representing a Company Object in a Kohan map.
     Contains a list of Unit objects.
     This inherits from MapObject.'''
-    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, player: int=1, formation: CompanyFormations=CompanyFormations.SKIRMISH):
+    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, player: int=1, name: str='New Company', formation: CompanyFormations=CompanyFormations.SKIRMISH):
         MapObject.__init__(self, Map, position=position, player=player)
         self.units = []
         self.units.append(Unit(captain, Map, self, self.player))
@@ -189,7 +188,8 @@ class Company(MapObject):
         self.banner_icon = self.units[1].banner_frame
         self.formation = formation
         self.sprite = f'banner-{self.Map.players[self.player]}-{self.player}-{self.banner_icon:02}-.png'
-    
+        self.display_name = name
+        
     def place_units(self, heading=0):
         '''Sets unit positions relative to company position, using a layout based on formation.
         heading is counterclockwise rotation from east in degrees.'''
