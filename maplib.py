@@ -4,12 +4,13 @@ import typing
 from enum import Enum
 from configparser import ConfigParser
 import re
+import numpy as np
 from pathlib import Path
 import math
 from PIL import Image, ImageQt
 import shutil
 import tgrtool
-#class UnitModifiers(Enum):
+
 class CompanyFormations(Enum):
     COMBAT = 0
     SKIRMISH = 1
@@ -43,6 +44,7 @@ class Position:
             out += f' pixel coordinate: ({self.x}, {self.y})'
         return out
 
+
 class SpriteCache:
     def __init__(self):
         self.cache = {}
@@ -65,9 +67,9 @@ class SpriteCache:
             match name.split(sep='-')[0]:
                 case 'banner':
                     src = self.cache_path/('-'.join(name.split(sep="-")[:3])+'.png')
-                    sprite = Image.open(src)
+                    banner = Image.open(src)
                     icon = Image.open(self.cache_path/f'icon-{name.split(sep="-")[3]}.png')
-                    sprite.paste(icon,mask=icon)
+                    sprite = Image.alpha_composite(banner, icon)
                 case 'unit':
                     dest = self.cache_path/'extracted'
                     src = Path(f'./Art/Objects/Units/{name.split(sep="-")[1]}.tgr')
@@ -85,7 +87,6 @@ class SpriteCache:
                     
 cache = SpriteCache()
             
-
 
 class KohanMap:
     def __init__(self, size: int):
@@ -131,7 +132,15 @@ class KohanMap:
 class MapGrid:
     def __init__(self, size):
         self.size = size
-        self.cells = [GridCell(Position(math.floor(i / self.size), i % self.size)) for i in range(self.size**2)]
+        # [0,:,:] contains the terrain type(s), and [1,:,:] contains the display and blocking data
+        # Initialize with regular grass tiles (0x00)
+        self.cells = np.zeros((2, self.size, self.size,),dtype='uint8')
+        edge_mask = np.full((self.size, self.size),0x30, np.uint8)
+        edge_mask[1:-1, 1:-1] = 0x10
+        self.cells[1,:,:] += edge_mask
+        
+        
+        #[[GridCell(Position(r, c)) for c in range(self.size)] for r in range(self.size)]
         
 class GridCell:
     '''A class representing a single grid cell in a Kohan map.
@@ -167,13 +176,24 @@ class MapObject:
 class Building(MapObject):
     '''A class representing a Building Object in a Kohan map.
     This inherits from MapObject.'''
-    pass
+    def __init__(self, type_name: str, Map: KohanMap, position: Position, display_name: str='Default', player: int=1):
+        MapObject.__init__(self, Map, position=position, player=player)
+        self.type_name = type_name
+        self.display_name = display_name
+        building_ini = ConfigParser(inline_comment_prefixes=(';',))
+        filepath = Path(f'./Data/ObjectData/Units/{type_name}.INI')
+        try:
+            building_ini.read(filepath)
+        except:
+            return
+            
+        
 
 class Company(MapObject):
     '''A class representing a Company Object in a Kohan map.
     Contains a list of Unit objects.
     This inherits from MapObject.'''
-    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, player: int=1, name: str='New Company', formation: CompanyFormations=CompanyFormations.SKIRMISH):
+    def __init__(self, Map: KohanMap, position, captain: str='CAPTAIN', front: str='FOOTMAN', support1=None, support2=None, display_name: str='New Company', player: int=1, formation: CompanyFormations=CompanyFormations.SKIRMISH):
         MapObject.__init__(self, Map, position=position, player=player)
         self.units = []
         self.units.append(Unit(captain, Map, self, self.player))
@@ -211,36 +231,17 @@ class Company(MapObject):
             x1 = math.cos(theta)*h + self.position.se
             y1 = math.sin(theta)*h + self.position.sw
             unit.position.set(x1, y1)
-            #print(f'index {i}')
-            #print(f'   company: {self.position}')
-            #for u in self.units:
-            #    print(f'   {u.position}')
-            #print('---------\n')
-            
-    
-    def fetch_sprite(self):
-        self.position.to_pixels(self.Map.size)
-        img_path = Path('./Art/Interface/Banners/')
-        banner = Image.open(img_path/'council-recruit.png')
-        icon = Image.open(img_path/f'icon-{self.banner_icon}.png')
-        banner.paste(icon,mask=icon)
-        sprite_ini = ConfigParser()
-        sprite_ini.read(img_path/'sprite.ini')
-        hsx = int(sprite_ini['HotSpot']['X'])
-        hsy = int(sprite_ini['HotSpot']['Y'])
-        box = (self.position.x -hsx, self.position.y - hsy, self.position.x + banner.size[0] - hsx, self.position.y + banner.size[1] - hsy)
-        return (banner, box)
         
             
 class Unit(MapObject):
     '''Class representing a single unit in a Company Object.
     Data is loaded from the cooresponding unit INI.'''
-    def __init__(self, name: str, Map: KohanMap, parent: Company, player: int=1):
+    def __init__(self, type_name: str, Map: KohanMap, parent: Company, player: int=1):
         MapObject.__init__(self, Map, player=player)
         self.parent = parent
-        self.name = name
+        self.type_name = type_name
         unit_ini = ConfigParser(inline_comment_prefixes=(';',))
-        filepath = Path(f'./Data/ObjectData/Units/{name}.INI').resolve()
+        filepath = Path(f'./Data/ObjectData/Units/{type_name}.INI').resolve()
         try:
             unit_ini.read(filepath)
             self.display_name = unit_ini['ObjectData']['ProperName']
@@ -285,20 +286,7 @@ class Unit(MapObject):
                 
         except Exception as e:
             print(repr(e))
-            print(f'Unable to create unit with name {name}: file {filepath} does not exist')
-    
-    def fetch_sprite(self):
-        self.position.to_pixels(self.Map.size)
-        dest = Path(f'./Art/Objects/Units/Extracted/{self.name}')
-        args = tgrtool.main_parse.parse_args(['unpack', f'{self.sprite_path}', '--single-frame', '0', '-c', '1', '-o', f'{dest}'])
-        args.func(args)
-        sprite_ini = ConfigParser()
-        sprite_ini.read(dest/'sprite.ini')
-        hsx = int(sprite_ini['HotSpot']['X'])
-        hsy = int(sprite_ini['HotSpot']['Y'])
-        sprite = Image.open(dest / 'fram_0000.png')
-        box = (self.position.x - hsx, self.position.y - hsy, self.position.x + sprite.size[0] - hsx, self.position.y + sprite.size[1] - hsy)
-        return (sprite, box)
+            print(f'Unable to create unit of type {type_name}: file {filepath} does not exist')
 
 class MapFeature:
     '''A class representing a Feature in a Kohan Map.'''
