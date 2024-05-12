@@ -303,14 +303,14 @@ typedef struct {
     typedef struct {
         byte name_len;
         char name[name_len];
-        ushort s1;
-        int i1;
-        int i2;
-        int i3;
-        int i4;
-        int i5;
-        int i6;
-    } HERO;
+        uint status;  // 0 when unused, 1 when amulet, 2, when available, 3 when in comp
+        byte data[4];
+        float experience;
+        BOOL awakened;  // 0 when unopened, 1 when opened
+        short s1;
+        int player_id;
+        int editor_id;
+    } HERO <comment=this.name>;
     
     while (start_pos + chunk_length > FTell() + 22) {
         HERO heroes;
@@ -590,6 +590,8 @@ typedef struct {
         ubyte b3;
         ubyte b4;
         char name[22];
+        FSeek(FTell()+6);
+        uint16 captain_id;
         FSeek(start_pos+46);
         float control_zone;
         FSeek(start_pos+62);
@@ -1246,7 +1248,7 @@ while (!FEof()) {
         case "MMGR": MMGR_CHUNK MMGR; FSeek(start_pos + MMGR.chunk_length + 8); break;
         case "TYPE": TYPE_CHUNK TYPE; FSeek(start_pos + TYPE.chunk_length + 8); break;
         case "HROS": HROS_CHUNK HROS; FSeek(start_pos + HROS.chunk_length + 8); break;
-        case "PLRS": PLRS_CHUNK PLRS; FSeek(start_pos + PLRS.chunk_length + 8); break;
+        //case "PLRS": PLRS_CHUNK PLRS; FSeek(start_pos + PLRS.chunk_length + 8); break;
         case "OBJS": OBJS_CHUNK OBJS; FSeek(start_pos + OBJS.chunk_length + 8); break;
         case "TRGS": TRGS_CHUNK TRGS; FSeek(start_pos + TRGS.chunk_length + 8); break;
         
