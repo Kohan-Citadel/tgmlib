@@ -234,7 +234,30 @@ class tgmFile:
                     # This allows for lookup by either name or index, and both will point to the same mutable object
                     self.by_name[name] = new_obj
                     self.by_index[i] = new_obj
-            return
+    
+    
+    class HrosChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[14].data_offset)
+                start_pos = in_fh.tell()
+                
+                (self.uk0,) = struct.unpack('=i', in_fh.read(4))
+                
+                self.heroes = {}
+                while in_fh.tell() + 22 < iff.data.children[14].length + start_pos:
+                    hero = {}
+                    (name_len,) = struct.unpack('=B', in_fh.read(1))
+                    (name,
+                     hero['status'],
+                     hero['i1'],
+                     hero['experience'],
+                     hero['awakened'],
+                     hero['s1'],
+                     hero['player_id'],
+                     hero['editor_id'],) = struct.unpack(f'={name_len}siifihii', in_fh.read(26+name_len))
+                    print(name)
+                    self.heroes[name.decode('ascii')] = hero
     
     class PlrsChunk:
         
@@ -287,6 +310,7 @@ class tgmFile:
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
                 self.MGRD = self.MgrdChunk(self.filename, self.iff, self.EDTR)
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
+                self.HROS = self.HrosChunk(self.filename, self.iff)
                 #self.PLRS = self.PlrsChunk(self.filename, self.iff)
                 self.OBJS = self.ObjsChunk(self.filename, self.iff, self.TYPE)
 

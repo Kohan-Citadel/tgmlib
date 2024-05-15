@@ -92,6 +92,26 @@ name_mapping = {
     'NEW_AHRIMAN_CITADEL': 'AHRIMAN_CITADEL',
     'NEW_AHRIMAN_CITADEL ruin': 'AHRIMAN_CITADEL ruin',
     }
+keys = list(old_map.HROS.heroes.keys())
+for k in keys:
+    if k in name_mapping:
+        old_map.HROS.heroes[name_mapping[k]] = old_map.HROS.heroes.pop(k)
+
+sym_dif = old_map.HROS.heroes.keys() ^ ref_map.HROS.heroes.keys()
+only_old = sym_dif & old_map.HROS.heroes.keys()
+only_ref = sym_dif & ref_map.HROS.heroes.keys()
+for k in only_old:
+    old_map.HROS.heroes.pop(k)
+for k in only_ref:
+    old_map.HROS.heroes[k] = {
+        'status': 0,
+        'i1': 0,
+        'experience': 0.0,
+        'awakened': 0.0,
+        's1': 0,
+        'player_id': -1,
+        'editor_id': 0,
+        }
 
 index_mapping = {}
 
@@ -131,7 +151,7 @@ def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
                 obj.unit_modifiers_provided.append((K, float(v),))
 
 
-hero_name_re = re.compile(r'([a-zA-Z_ ]+?)(Enlightened|Restored|Ascended){0,1}$')
+hero_name_re = re.compile(r"([a-zA-Z_ ']+?)(Enlightened|Restored|Ascended){0,1}$")
 for obj in old_map.OBJS.objs:
     print(f'obj id:{obj.header.editor_id} ix:{obj.header.index} -> {index_mapping[obj.header.index]}')
     obj.header.index = index_mapping[obj.header.index]
@@ -170,6 +190,10 @@ for obj in old_map.OBJS.objs:
                 if ref_type['subtype'] == 2:
                     m = hero_name_re.match(ref_type['name'])
                     name = m.group(1).upper().replace(' ', '_')
+                    if name == 'SAMMAN_OSAHYR':
+                        name = 'SAMMAN OSAHYR'
+                    if name == "ISHAN_'GHUL":
+                        name = "ISHAN'GHUL"
                     match m.group(2):
                         case 'Enlightened':
                             level = 1
@@ -232,12 +256,10 @@ for obj in old_map.OBJS.objs:
     #main index and all references
         #copy correct index (TYPE) from correct blank map
         #index locations are FTRS, 
-        #include list of overrides for ini swaps
-        #apply overrides to HROS
-        #add adtl heroes to HROS
+
     
 
 #Adtl TODO
-    #Add HROS chunk
+
     #Add FTRS Chunk
     #Add repacking to .TGM
