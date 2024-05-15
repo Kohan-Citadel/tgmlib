@@ -349,6 +349,15 @@ class MapObj:
              self.editor_id,
              self.hotspot_se,
              self.hotspot_sw,) = struct.unpack('=BBHIff', fh.read(16))
+    
+        def pack(self):
+            return struct.pack('BBHIff',
+                               self.obj_class,
+                               self.player,
+                               self.index,
+                               self.editor_id,
+                               self.hotspot_se,
+                               self.hotspot_sw,)
 
 
 class Building(MapObj):
@@ -650,21 +659,75 @@ class Unit(MapObj):
          self.f7,
          self.base_speed,) = struct.unpack('=4xf32s5f', self.fh.read(60))
         
-        self.fh.seek(findBytes(b'\x00\x40\x40\x00\x00\x00\x00\x01', self.fh, search_length=100) + 8)
-        print(f'    searched to {self.fh.tell()} for max_hp')
-        (self.max_hp,) = struct.unpack('=f', self.fh.read(4))
+        start_search = in_fh.tell();
+        hp_pos = findBytes(b'\x00\x40\x40\x00\x00\x00\x00\x01', self.fh, search_length=100) + 8
+        (self.uk4,
+         self.max_hp,) = struct.unpack(f'={hp_pos-start_search}sf', self.fh.read(4+hp_pos-start_search))
         
         match TYPE.by_index[self.header.index]['subtype']:
             case 1:
                 (self.f8,
                  self.mana,
-                 self.uk4,) = struct.unpack('=ff5s', self.fh.read(13))
+                 self.uk5,) = struct.unpack('=ff5s', self.fh.read(13))
             case 2:
                 (self.f8,
                  self.mana,
-                 self.uk4,) = struct.unpack('=ff9s', self.fh.read(17))
-
-      
+                 self.uk5,) = struct.unpack('=ff9s', self.fh.read(17))
+    
+    def pack(self, TYPE):
+        data = b''
+        data += struct.pack('<B', self.unit_index,)
+        data += self.header.pack()
+        data += struct.pack('<BB', self.flag1, self.flag2,)
+        match self.flag2:
+            case 0x09:
+                 data += struct.unpack('<fH', self.current_hp, self.uk0,)
+            case 0x0B:
+                data += struct.unpack('<H', self.uk0,)
+            case 0x0D:
+                data += struct.unpack('<f', self.current_hp,)
+        data += struct.pack('<24sHH6f42sII',
+                            self.uk1,
+                            self.pos_se,
+                            self.pos_sw,
+                            self.f0,
+                            self.f1,
+                            self.f2,
+                            self.f3,
+                            self.f4,
+                            self.current_speed,
+                            self.uk2,
+                            self.modifiers_gained['start'],
+                            (len(self.modifiers_gained) - 1) * 4,)
+        for k, v in self.modifiers_gained.items():
+            if k != 'start':
+                data += struct.pack('f', v)
+        data += struct.pack(f'<if32s5f{len(self.uk4)}sf',
+                            0,
+                            self.f5,
+                            self.uk3,
+                            self.hotspot_se,
+                            self.hotspot_sw,
+                            self.f6,
+                            self.f7,
+                            self.base_speed,
+                            self.uk4,
+                            self.max_hp,)
+        
+        match TYPE.by_index[self.header.index]['subtype']:
+            case 1:
+                data += struct.pack('<ff5s',
+                                    self.f8,
+                                    self.mana,
+                                    self.uk5,)
+            case 2:
+                data += struct.pack('<ff9s',
+                                    self.f8,
+                                    self.mana,
+                                    self.uk5,)
+        return data
+        
+        
 def findBytes(query, fh, search_length=None):
     start_pos = fh.tell()
     cur_val = fh.read(len(query))
@@ -695,8 +758,8 @@ def getMapObjClass(in_fh):
                 
                 
                 
-#testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
-#testTGM.load()
+testTGM = tgmFile('ECM1.TGM')
+testTGM.load()
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 
