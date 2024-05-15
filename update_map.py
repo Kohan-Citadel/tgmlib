@@ -3,9 +3,11 @@ from configparser import ConfigParser
 from pathlib import Path
 import re
 from copy import deepcopy
+import struct
 
 old_map_path = 'ECM1.TGM'
 new_map_path = 'KG-0.9.6.TGM'
+dest_path = 'ECM1-UPDATE.TGM'
 name_mapping_path = ''
 old_map = tgmlib.tgmFile(old_map_path)
 ref_map = tgmlib.tgmFile(new_map_path)
@@ -245,7 +247,29 @@ for obj in old_map.OBJS.objs:
                 elif op == 'multiply':
                     obj.modifiers_gained[k][0] *= float(v)
 
-    
+#copy each chunk from old_map verbatim, unless it's been updated
+with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
+    #write placeholder FORM
+    out_fp.write(b'FORM\xFF\xFF\xFF\xFFTGSV')
+    for chunk in old_map.iff.data.children  :
+        match chunk.type:
+            case 'FTRS':
+                pass
+            case 'TYPE':
+                pass
+            case 'HROS':
+                pass
+            case 'OBJS':
+                pass
+            case _:
+                out_fp.write(struct.pack('>4sI', chunk.type.encode('ascii'), chunk.length))
+                in_fp.seek(chunk.data_offset)
+                out_fp.write(in_fp.read(chunk.length))
+                if padding_size := (out_fp.tell() % 4):
+                    out_fp.write(b'\x00'*padding_size)
+            
+
+
 # Items to update:
     #main index and all references
         #copy correct index (TYPE) from correct blank map
