@@ -302,17 +302,17 @@ class Building(MapObj):
             (self.padding,
              self.supply_zone,
              self.unknown1,
-             self.current_militia,
-             self.militia_regen,
+             self.current,
+             self.regen_rate,
              self.unknown2,
              self.guard_zone,
              self.unknown3,
-             self.militia_front,
-             self.militia_support,
+             self.front_index,
+             self.support_index,
              self.company_size,
              self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', fh.read(49))
             (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', fh.read(self.comp_name_len))
-            (self.max_militia,) = struct.unpack('=f', fh.read(4))
+            (self.max,) = struct.unpack('=f', fh.read(4))
     
     class Modifiers:
         def __init__(self, fh):
@@ -365,7 +365,7 @@ class Building(MapObj):
             
             # Settlements
             case 1|5|6|7|8:
-                self.militia_data = self.MilitiaData(self.fh)
+                self.militia = self.MilitiaData(self.fh)
                 
                 (self.unknown5,
                  self.component_bitflag,

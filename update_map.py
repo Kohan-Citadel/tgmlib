@@ -1,13 +1,14 @@
 import tgmlib
+import maplib
 
 old_map_path = 'ECM1.TGM'
 new_map_path = 'KG-0.9.6.TGM'
 name_mapping_path = ''
 old_map = tgmlib.tgmFile(old_map_path)
-new_map = tgmlib.tgmFile(new_map_path)
+ref_map = tgmlib.tgmFile(new_map_path)
 old_map.load()
 print('---------------------------------------------------------------------')
-new_map.load()
+ref_map.load()
 
 # Use this mapping to go from pre KG-0.9.5 (includes AG-1.3.7 and 1.3.10) to KG-0.9.6
 name_mapping = {
@@ -97,18 +98,25 @@ for k, v in old_map.TYPE.by_name.items():
     else:
         name = k
         
-    new_index = new_map.TYPE.by_name[name]['index']
+    new_index = ref_map.TYPE.by_name[name]['index']
     old_index = v['index']
     index_mapping[old_index] = new_index
+
+old_map.TYPE = ref_map.TYPE
     
 for obj in old_map.OBJS.objs:
     print(f'obj id:{obj.header.editor_id} ix:{obj.header.index} -> {index_mapping[obj.header.index]}')
     obj.header.index = index_mapping[obj.header.index]
     match obj.header.obj_class:
         case 0x24:
-            # Building specific stuff goes here
-            pass
+            if hasattr(obj, militia):
+                obj.militia.front_index = index_mapping[obj.militia.front_index]
+                obj.militia.support_index = index_mapping[obj.militia.support_index]
+
         case 0x3C:
+            for unit in obj.units:
+                
+            
             # company specific stuff goes here
             #company speed
             #company modifiers provided
