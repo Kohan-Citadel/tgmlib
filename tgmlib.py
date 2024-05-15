@@ -17,6 +17,17 @@ comp_mods_lookup = {
 	0x2B: 'ENTRENCHMENT_RATE_BONUS',
 }
 
+comp_mods_default = {
+    'RESUPPLY_RATE_BONUS': [1, 'multiply'],
+	'ZONE_OF_CONTROL_BONUS': [1, 'multiply'],
+	'MORALE_BONUS': [0, 'add'],
+	'MORALE_LOSS_RATE_BONUS': [1, 'multiply'],
+	'MORALE_RECOVERY_RATE_BONUS': [1, 'multiply'],
+	'MORALE_CHECK_BONUS': [0, 'add'],
+	'VISUAL_RANGE_BONUS': [1, 'multiply'],
+	'ENTRENCHMENT_RATE_BONUS': [1, 'multiply'],
+    }
+
 unit_mods_lookup = {
 	0x01: 'ATTACK_BONUS_TO_ANY',
 	0x02: 'ATTACK_BONUS_TO_MOUNTED',
@@ -56,40 +67,40 @@ unit_mods_lookup = {
 
 }
 
-unit_mods_gained_list = [
-	'ATTACK_BONUS_TO_ANY',
-	'ATTACK_BONUS_TO_MOUNTED',
-	'UK0',
-	'ATTACK_BONUS_TO_SHADOW',
-	'ATTACK_BONUS_TO_BUILDING',
-	'ATTACK_BONUS_TO_ARCHER',
-	'ATTACK_BONUS_TO_ROUTED',
-	'DEFENSE_BONUS_VS_ANY',
-	'DEFENSE_BONUS_VS_MOUNTED',
-	'UK1',
-	'DEFENSE_BONUS_VS_SHADOW',
-	'DEFENSE_BONUS_VS_ARCHER',
-	'WAS_DAMAGE_BONUS_TO_SHADOW',
-	'DAMAGE_BONUS_TO_ANY',
-	'WAS_DAMAGE_BONUS_TO_MOUNTED',
-	'UK2',
-	'ATTACK_BONUS_TO_NONSHADOW',
-	'RELOAD_TIME_BONUS',
-	'DAMAGE_TAKEN_FROM_MAGIC',
-	'DAMAGE_TAKEN_FROM_NON_MAGIC',
-	'DAMAGE_TAKEN_FROM_RANGED',
-	'DAMAGE_TAKEN_FROM_MELEE',
-	'DAMAGE_TAKEN_FROM_ANY',
-	'REVERSE_DAMAGE_WHEN_HIT',
-	'DAMAGE_TAKEN_FROM_HOLY',
-	'DAMAGE_TAKEN_FROM_UNHOLY',
-	'DAMAGE_TAKEN_FROM_KHALDUNITE',
-	'IMMUNITY_TO_ENCHANTMENT',
-	'MELEE_HOLY_DAMAGE',
-	'MELEE_UNHOLY_DAMAGE',
-	'CAUSE_KHALDUNITE_DAMAGE',
-	'CAUSE_MAGIC_DAMAGE',
-    ]
+unit_mods_default = {
+	'ATTACK_BONUS_TO_ANY': [0, 'add'],
+	'ATTACK_BONUS_TO_MOUNTED': [0, 'add'],
+	'UK0': [0, 'add'],
+	'ATTACK_BONUS_TO_SHADOW': [0, 'add'],
+	'ATTACK_BONUS_TO_BUILDING': [0, 'add'],
+	'ATTACK_BONUS_TO_ARCHER': [0, 'add'],
+	'ATTACK_BONUS_TO_ROUTED': [0, 'add'],
+	'DEFENSE_BONUS_VS_ANY': [0, 'add'],
+	'DEFENSE_BONUS_VS_MOUNTED': [0, 'add'],
+	'UK1': [0, 'add'],
+	'DEFENSE_BONUS_VS_SHADOW': [0, 'add'],
+	'DEFENSE_BONUS_VS_ARCHER': [0, 'add'],
+	'WAS_DAMAGE_BONUS_TO_SHADOW': [1, 'multiply'],
+	'DAMAGE_BONUS_TO_ANY': [0, 'add'],
+	'WAS_DAMAGE_BONUS_TO_MOUNTED': [1, 'multiply'],
+	'UK2': [0, 'add'],
+	'ATTACK_BONUS_TO_NONSHADOW': [0, 'add'],
+	'RELOAD_TIME_BONUS': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_MAGIC': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_NON_MAGIC': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_RANGED': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_MELEE': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_ANY': [1, 'multiply'],
+	'REVERSE_DAMAGE_WHEN_HIT': [0, 'add'],
+	'DAMAGE_TAKEN_FROM_HOLY': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_UNHOLY': [1, 'multiply'],
+	'DAMAGE_TAKEN_FROM_KHALDUNITE': [1, 'multiply'],
+	'IMMUNITY_TO_ENCHANTMENT': [0, 'add'],
+	'MELEE_HOLY_DAMAGE': [0, 'add'],
+	'MELEE_UNHOLY_DAMAGE': [0, 'add'],
+	'CAUSE_KHALDUNITE_DAMAGE': [0, 'add'],
+	'CAUSE_MAGIC_DAMAGE': [0, 'add'],
+    }
 
 
 class tgmFile:
@@ -523,22 +534,22 @@ class Company(MapObj):
             ]
         
         (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
-        self.company_modifiers_provided = {'start': start}
+        self.company_modifiers_provided = [('start', start)]
         for _ in range(num_modifiers):
             (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
-            self.company_modifiers_provided[comp_mods_lookup[key]] = value
+            self.company_modifiers_provided.append((comp_mods_lookup[key], value,))
         
         (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
-        self.unit_modifiers_provided = {'start': start}
+        self.unit_modifiers_provided = [('start', start),]
         for _ in range(num_modifiers):
             (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
-            self.unit_modifiers_provided[unit_mods_lookup[key]] = value
+            self.unit_modifiers_provided.append((unit_mods_lookup[key], value,))
         self.fh.seek(4, 1) # skips 4byte padding
         
         (start,)  = struct.unpack('=8s', self.fh.read(8))
-        self.all_company_modifiers = {'start': start}
+        self.modifiers_gained = {'start': start}
         for m in comp_mods_lookup.values():
-            (self.all_company_modifiers[m],) = struct.unpack('=f', self.fh.read(4))
+            (self.modifiers_gained[m],) = struct.unpack('=f', self.fh.read(4))
         self.fh.seek(4, 1) # skips 4byte padding
         
         (self.uk6,
@@ -583,7 +594,7 @@ class Unit(MapObj):
          modifiers_size,) = struct.unpack('=24sHH6f42sII', self.fh.read(102))
         
         self.modifiers_gained = {'start': start}
-        for m in unit_mods_gained_list:
+        for m in unit_mods_default.keys():
             (self.modifiers_gained[m],) = struct.unpack('=f', self.fh.read(4))
         
         (self.f5,

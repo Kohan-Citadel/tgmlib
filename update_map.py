@@ -1,5 +1,8 @@
 import tgmlib
-import maplib
+from configparser import ConfigParser
+from pathlib import Path
+import re
+from copy import deepcopy
 
 old_map_path = 'ECM1.TGM'
 new_map_path = 'KG-0.9.6.TGM'
@@ -102,40 +105,133 @@ for k, v in old_map.TYPE.by_name.items():
     old_index = v['index']
     index_mapping[old_index] = new_index
 
-old_map.TYPE = ref_map.TYPE
+def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
+    eb_name = 'ElementBonus'
+    sb_name = 'SupportBonus'
+    if hero_level > 0:
+        eb_name += str(hero_level)
+        sb_name += str(hero_level)
     
+    for k, v in unit_ini[eb_name].items():
+        K = k.upper()
+        op = unit.modifiers_gained[K][1]
+        print(f'  op: {op}')
+        if op == 'add':
+            unit.modifiers_gained[K][0] += int(v)
+            print(f'  new val: {unit.modifiers_gained[K][0]}')
+        elif op == 'multiply':
+            unit.modifiers_gained[K][0] *= float(v)
+            
+    if unit_index in (0,5,6):
+        for k, v in unit_ini[sb_name].items():
+            K = k.upper()
+            if K in tgmlib.comp_mods_default:
+                obj.company_modifiers_provided.append((K, float(v),))
+            elif K in tgmlib.unit_mods_default:
+                obj.unit_modifiers_provided.append((K, float(v),))
+
+
+hero_name_re = re.compile(r'([a-zA-Z_ ]+?)(Enlightened|Restored|Ascended){0,1}$')
 for obj in old_map.OBJS.objs:
     print(f'obj id:{obj.header.editor_id} ix:{obj.header.index} -> {index_mapping[obj.header.index]}')
     obj.header.index = index_mapping[obj.header.index]
     match obj.header.obj_class:
         case 0x24:
-            if hasattr(obj, militia):
+            if hasattr(obj, 'militia'):
                 obj.militia.front_index = index_mapping[obj.militia.front_index]
                 obj.militia.support_index = index_mapping[obj.militia.support_index]
 
         case 0x3C:
-            for unit in obj.units:
-                
+            obj.captain_index = index_mapping[obj.captain_index]
+            obj.front_index = index_mapping[obj.front_index]
+            obj.support1_index = index_mapping[obj.support1_index]
+            obj.support2_index = index_mapping[obj.support2_index]
             
-            # company specific stuff goes here
-            #company speed
+            #set modifiers to default
+            start = obj.modifiers_gained['start']
+            obj.modifiers_gained = deepcopy(tgmlib.comp_mods_default)
+            obj.modifiers_gained['start'] = start
+            obj.unit_modifiers_provided = obj.unit_modifiers_provided[:1]
+            obj.company_modifiers_provided = obj.company_modifiers_provided[:1]
+            
+            # Higher value than any real unit
+            # This will be reduced to slowest unit in comp
+            obj.speed = 5
+            
+            for unit in obj.units:
+                unit.header.index = index_mapping[unit.header.index]
+                unit_ini = ConfigParser(inline_comment_prefixes=(';',))
+                ref_type = ref_map.TYPE.by_index[unit.header.index]
+                #set modifiers to default
+                start = unit.modifiers_gained['start']
+                unit.modifiers_gained = deepcopy(tgmlib.unit_mods_default)
+                unit.modifiers_gained['start'] = start
+                # if hero
+                if ref_type['subtype'] == 2:
+                    m = hero_name_re.match(ref_type['name'])
+                    name = m.group(1).upper().replace(' ', '_')
+                    match m.group(2):
+                        case 'Enlightened':
+                            level = 1
+                        case 'Restored':
+                            level = 2
+                        case 'Ascended':
+                            level = 3
+                        case _:
+                            level = 0
+                    
+                    print(f'  {ref_type["name"]} {name} {level}')
+                    filepath = Path(f'./Data/ObjectData/Heroes/{name}.INI').resolve()
+                    unit_ini.read(filepath)
+                    unitUpdateModifiers(unit_ini, unit.unit_index, hero_level=level)
+                    if level == 0:
+                        unit.max_hp = float(unit_ini['ObjectData']['MaxHitPoints']) 
+                    else:
+                        unit.max_hp = float(unit_ini[f'Level{level}']['MaxHitPoints'])
+                 
+                else:
+                    name = ref_type['name']
+                    filepath = Path(f'./Data/ObjectData/Units/{name}.INI').resolve()
+                    unit_ini.read(filepath)
+                    unit.max_hp = float(unit_ini['ObjectData']['MaxHitPoints'])
+                    unitUpdateModifiers(unit_ini, unit.unit_index)
+                
+                unit.current_speed = unit.base_speed = float(unit_ini['UnitData']['MovementRate'])
+                if unit.base_speed < obj.speed:
+                    obj.speed = unit.base_speed
+    
+            
+            for unit in obj.units:
+                for (k, v,) in obj.unit_modifiers_provided[1:]:
+                    op = unit.modifiers_gained[k][1]
+                    if op == 'add':
+                        unit.modifiers_gained[k][0] += int(v)
+                    elif op == 'multiply':
+                        unit.modifiers_gained[k][0] *= float(v)
+            
+            print(obj.modifiers_gained)
+            for (k, v,) in obj.company_modifiers_provided[1:]:
+                op = obj.modifiers_gained[k][1]
+                if op == 'add':
+                    obj.modifiers_gained[k][0] += int(v)
+                elif op == 'multiply':
+                    obj.modifiers_gained[k][0] *= float(v)
+                
+           
             #company modifiers provided
             #unit modifiers provided
             #all company modifiers
-            #unit current speed
             #unit modifiers gained
-            #unit base speed
-            #unit max hp
-            #unit mana
-            pass
+            
 
     
-    
+   
+
     
 # Items to update:
     #main index and all references
         #copy correct index (TYPE) from correct blank map
-        #index locations are FTRS, OBJS, and individual units
+        #index locations are FTRS, 
         #include list of overrides for ini swaps
         #apply overrides to HROS
         #add adtl heroes to HROS
@@ -144,5 +240,4 @@ for obj in old_map.OBJS.objs:
 #Adtl TODO
     #Add HROS chunk
     #Add FTRS Chunk
-    #Add companies
     #Add repacking to .TGM
