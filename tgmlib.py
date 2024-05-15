@@ -211,6 +211,26 @@ class tgmFile:
                 self.layout = layout & 15
                 
     
+    class FtrsChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[6].data_offset)
+                start_pos = in_fh.tell()
+                (self.load,) = struct.unpack('=i', in_fh.read(4))
+                self.features = []
+                while (in_fh.tell() < start_pos + iff.data.children[6].length):
+                    feature = {}
+                    (feature['header'],
+                     feature['index'],
+                     feature['editor_id'],
+                     feature['pos_se'],
+                     feature['pos_sw'],
+                     feature['flag'],) = struct.unpack('=hHIffH', in_fh.read(18))
+                    if feature['flag'] == 0x0F09:
+                        (feature['data'],) = struct.unpack('4s', in_fh.read(4))
+                    self.features.append(feature)
+    
+    
     class TypeChunk:
         
         def __init__(self, filename: str, iff: ifflib.iff_file):
@@ -309,6 +329,7 @@ class tgmFile:
                     print(f"Error: invalid file type: {self.iff.data.formtype}")
                 self.EDTR = self.EdtrChunk(self.filename, self.iff)
                 self.MGRD = self.MgrdChunk(self.filename, self.iff, self.EDTR)
+                self.FTRS = self.FtrsChunk(self.filename, self.iff)
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
                 self.HROS = self.HrosChunk(self.filename, self.iff)
                 #self.PLRS = self.PlrsChunk(self.filename, self.iff)

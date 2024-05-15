@@ -125,6 +125,10 @@ for k, v in old_map.TYPE.by_name.items():
     old_index = v['index']
     index_mapping[old_index] = new_index
 
+for f in old_map.FTRS.features:
+    if f['index'] != 0xFFFF:
+        f['index'] = index_mapping[f['index']] 
+
 def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
     eb_name = 'ElementBonus'
     sb_name = 'SupportBonus'
@@ -240,26 +244,15 @@ for obj in old_map.OBJS.objs:
                     obj.modifiers_gained[k][0] += int(v)
                 elif op == 'multiply':
                     obj.modifiers_gained[k][0] *= float(v)
-                
-           
-            #company modifiers provided
-            #unit modifiers provided
-            #all company modifiers
-            #unit modifiers gained
-            
-
-    
-   
 
     
 # Items to update:
     #main index and all references
         #copy correct index (TYPE) from correct blank map
-        #index locations are FTRS, 
+
 
     
 
 #Adtl TODO
 
-    #Add FTRS Chunk
     #Add repacking to .TGM
