@@ -56,6 +56,41 @@ unit_mods_lookup = {
 
 }
 
+unit_mods_gained_list = [
+	'ATTACK_BONUS_TO_ANY',
+	'ATTACK_BONUS_TO_MOUNTED',
+	'UK0',
+	'ATTACK_BONUS_TO_SHADOW',
+	'ATTACK_BONUS_TO_BUILDING',
+	'ATTACK_BONUS_TO_ARCHER',
+	'ATTACK_BONUS_TO_ROUTED',
+	'DEFENSE_BONUS_VS_ANY',
+	'DEFENSE_BONUS_VS_MOUNTED',
+	'UK1',
+	'DEFENSE_BONUS_VS_SHADOW',
+	'DEFENSE_BONUS_VS_ARCHER',
+	'WAS_DAMAGE_BONUS_TO_SHADOW',
+	'DAMAGE_BONUS_TO_ANY',
+	'WAS_DAMAGE_BONUS_TO_MOUNTED',
+	'UK2',
+	'ATTACK_BONUS_TO_NONSHADOW',
+	'RELOAD_TIME_BONUS',
+	'DAMAGE_TAKEN_FROM_MAGIC',
+	'DAMAGE_TAKEN_FROM_NON_MAGIC',
+	'DAMAGE_TAKEN_FROM_RANGED',
+	'DAMAGE_TAKEN_FROM_MELEE',
+	'DAMAGE_TAKEN_FROM_ANY',
+	'REVERSE_DAMAGE_WHEN_HIT',
+	'DAMAGE_TAKEN_FROM_HOLY',
+	'DAMAGE_TAKEN_FROM_UNHOLY',
+	'DAMAGE_TAKEN_FROM_KHALDUNITE',
+	'IMMUNITY_TO_ENCHANTMENT',
+	'MELEE_HOLY_DAMAGE',
+	'MELEE_UNHOLY_DAMAGE',
+	'CAUSE_KHALDUNITE_DAMAGE',
+	'CAUSE_MAGIC_DAMAGE',
+    ]
+
 
 class tgmFile:
     """
@@ -214,292 +249,9 @@ class tgmFile:
                     in_fh.seek(start_pos+4597)
                     self.players.append(new_player)
             return
-        
+
+    
     class ObjsChunk:
-        
-        class MapObj:
-            
-            class ObjectHeader:
-                def __init__(self, in_fh):
-                    (self.obj_class,
-                     self.player,
-                     self.index,
-                     self.editor_id,
-                     self.hotspot_se,
-                     self.hotspot_sw,) = struct.unpack('=BBHIff', in_fh.read(16))
-            
-            
-            
-            class Building:
-                
-                class MilitiaData:
-                    def __init__(self, in_fh):
-                        (self.padding,
-                         self.supply_zone,
-                         self.unknown1,
-                         self.current_militia,
-                         self.militia_regen,
-                         self.unknown2,
-                         self.guard_zone,
-                         self.unknown3,
-                         self.militia_front,
-                         self.militia_support,
-                         self.company_size,
-                         self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', in_fh.read(49))
-                        (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', in_fh.read(self.comp_name_len))
-                        (self.max_militia,) = struct.unpack('=f', in_fh.read(4))
-                
-                class Modifiers:
-                    def __init__(self, in_fh):
-                        (self.size,
-                         self.group_1_commission_cost,
-                         self.group_1_commission_cost,
-                         self.group_1_commission_cost,
-                         self.group_1_commission_cost,
-                         self.militia_av,
-                         self.militia_dv,
-                         self.magic_resistance,
-                         self.non_magic_resistance,
-                         self.construction_cost,) = struct.unpack('=I9f', in_fh.read(40))
-                        if self.size > 36:
-                            (self.kaldunite_resistance,
-                             self.padding,) = struct.unpack(f'=f{self.size-40}s', in_fh.read(4+self.size-40))
-                
-                
-                        
-                
-                def __init__(self, in_fh, TYPE, header):
-                    (self.name,
-                     self.flag1,
-                     self.flag2,) = struct.unpack('=20sBB', in_fh.read(22))
-                    if self.flag2 == 13:
-                        (self.current_hp,) = struct.unpack('=f', in_fh.read(4))
-                    elif self.flag2 == 7:
-                        (self.unknown_flag_data,) = struct.unpack('=B', in_fh.read(1))
-                    
-                    (self.unknown1,
-                     self.status,
-                     self.unknown2,
-                     self.pos_se,
-                     self.pos_sw,
-                     self.current_gold_production,
-                     self.current_stone_production,
-                     self.current_wood_production,
-                     self.current_iron_production,
-                     self.current_mana_production,
-                     self.unknown3,
-                     self.max_hp,
-                     self.unknown4,
-                     self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', in_fh.read(54))
-                    
-                    #print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
-                    match TYPE.by_index[header.index]['subtype']:
-                        # Ruins
-                        case 0:
-                            (self.ruin_data,) = struct.unpack('=13s', in_fh.read(13))
-                        
-                        # Settlements
-                        case 1|5|6|7|8:
-                            self.militia_data = self.MilitiaData(in_fh)
-                            
-                            (self.unknown5,
-                             self.component_bitflag,
-                             self.unknown6,
-                             self.inportant0) = struct.unpack('=10sB4sI', in_fh.read(19))
-                            
-                            # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
-                            start_pos = in_fh.tell()
-                            while in_fh.read(2) != b'\xA0\x40':
-                                in_fh.seek(-1, 1)
-                            pad_len = in_fh.tell() - start_pos
-                            in_fh.seek(start_pos)
-                            (padding,) = struct.unpack(f'={pad_len+14}s', in_fh.read(pad_len+14))
-                            print(f'  reading building mods @ {in_fh.tell()}')
-                            self.building_modifiers = self.Modifiers(in_fh)
-                            
-                            (self.important1,
-                             self.num_modifiers) = struct.unpack('=2I', in_fh.read(8))
-                            if self.num_modifiers == 0:
-                                (self.block_2,) = struct.unpack('=5s', in_fh.read(5))
-                            else:
-                                self.gained_modifiers = []
-                                print(f'nm:{self.num_modifiers}')
-                                for _ in range (self.num_modifiers):
-                                    new_mod = {}
-                                    (new_mod['id'],
-                                     new_mod['value'],
-                                     new_mod['null'],) = struct.unpack('=HfB', in_fh.read(7))
-                                    
-                                (self.unknown,
-                                 self.upgrade_cost) = struct.unpack('=Bf', in_fh.read(5))
-                                
-                            self.components = []
-                            self.ct_components = 0
-                            # Counts the number of high bits in the bitflag
-                            x = self.component_bitflag
-                            for _ in range(0,8):
-                                self.ct_components += x&1
-                                x >>= 1
-                            # +1 for adtl blank comp
-                            print(f'  reading comps @ {in_fh.tell()}')
-                            for i in range(self.ct_components + 1):
-                                new_comp = {}
-                                print(f'    reading comp @ {in_fh.tell()}')
-                                if (check_cost := struct.unpack('=f', in_fh.read(4))[0]) > 1:
-                                    new_comp['component_cost'] = check_cost
-                                else:
-                                    in_fh.seek(-4, 1)
-                                
-                                (new_comp['size'],) = struct.unpack('=I', in_fh.read(4))
-                                upgrade_name = struct.unpack('=20s', in_fh.read(20))[0].split(sep=b'\00', maxsplit=1)[0]
-                                print(f'    un:{upgrade_name} {len(upgrade_name)}')
-                                in_fh.seek(-20 + len(upgrade_name), 1)
-                                if len(upgrade_name) > 1:
-                                    new_comp['upgrade_name'] = upgrade_name
-                                (new_comp['data'],) = struct.unpack(f"={new_comp['size']}s", in_fh.read(new_comp['size']))
-                                self.components.append(new_comp)
-                        case 2:
-                            self.militia_data = self.MilitiaData(in_fh)
-                            # Skips null bytes
-                            pad_size = 0
-                            while in_fh.read(1) == b'\00':
-                                pad_size += 1
-                            in_fh.seek(-1,1)
-                            
-                        case 3:
-                            self.militia_data = self.MilitiaData(in_fh)
-                            (self.unknown5,) = struct.unpack('=17s', in_fh.read(17))
-                            
-                        case 4:
-                            (self.unknown5,
-                             self.base_gold_production,
-                             self.base_stone_production,
-                             self.base_wood_production,
-                             self.base_iron_production,
-                             self.base_mana_production,) = struct.unpack('=26sfffff', in_fh.read(46))
-            
-            class Company:
-                
-                class Unit:
-                    def __init__(self, in_fh):
-                        (self.unit_index,) = struct.unpack('=B', in_fh.read(1))
-                        self.header = ObjsChunk.MapObj.ObjectHeader(in_fh)
-                        (self.flag1, self.flag2,) = struct.unpack('=', buffer)
-                        
-                def __init__(self, in_fh):
-                    (self.captain_index,
-                     self.front_index,
-                     self.support1_index,
-                     self.support2_index,
-                     self.b1,
-                     self.b2,
-                     self.b3,
-                     self.b4,
-                     self.name,) = struct.unpack('=4H4B22s', in_fh.read(34))
-                    
-                    (self.uk0,
-                     self.captain_id,
-                     self.occupy_flag0,
-                     self.control_zone,
-                     self.occupy_flag1,
-                     self.required,
-                     self.uk2,
-                     stone,
-                     wood,
-                     iron,
-                     mana,
-                     self.speed,
-                     self.f0,
-                     self.f1,
-                     self.attack_efficiency,
-                     self.formation_atk_mod,
-                     self.f4,
-                     self.experience,
-                     self.uk3,
-                     self.current_morale,
-                     self.max_morale,
-                     self.uk4,
-                     self.zone_of_control,
-                     self.uk5,
-                     u0_pos_se,
-                     u0_pos_sw,
-                     u1_pos_se,
-                     u1_pos_sw,
-                     u2_pos_se,
-                     u2_pos_sw,
-                     u3_pos_se,
-                     u3_pos_sw,
-                     u4_pos_se,
-                     u4_pos_sw,
-                     u5_pos_se,
-                     u5_pos_sw,
-                     ) = struct.unpack('=6sHIfII4s11f13s2f16sf167s12fxxxx', in_fh.read(332))
-                    
-                    self.upkeep = {
-                        'stone': stone,
-                        'wood': wood,
-                        'iron': iron,
-                        'mana': mana,
-                        }
-                    
-                    self.unit_positions = [
-                        {'se': u0_pos_se,
-                         'sw': u0_pos_sw,},
-                        {'se': u1_pos_se,
-                         'sw': u1_pos_sw,},
-                        {'se': u2_pos_se,
-                         'sw': u2_pos_sw,},
-                        {'se': u3_pos_se,
-                         'sw': u3_pos_sw,},
-                        {'se': u4_pos_se,
-                         'sw': u4_pos_sw,},
-                        {'se': u5_pos_se,
-                         'sw': u5_pos_sw,},
-                        ]
-                    
-                    (start, num_modifiers,) = struct.unpack('=II', in_fh.read(8))
-                    self.company_modifiers_provided = {}
-                    for _ in range(num_modifiers):
-                        (key, value,) = struct.unpack('=Hfx', in_fh.read(7))
-                        self.company_modifiers_provided[comp_mods_lookup[key]] = value
-                    
-                    (start, num_modifiers,) = struct.unpack('=II', in_fh.read(8))
-                    self.unit_modifiers_provided = {}
-                    for _ in range(num_modifiers):
-                        (key, value,) = struct.unpack('=Hfx', in_fh.read(7))
-                        self.unit_modifiers_provided[unit_mods_lookup[key]] = value
-                    in_fh.seek(4, 1) # skips 4byte padding
-                    
-                    self.all_company_modifiers = {}
-                    in_fh.seek(8, 1) # skips 8 'start' bytes
-                    for m in comp_mods_lookup.values():
-                        (self.all_company_modifiers[m],) = struct.unpack('=f', in_fh.read(4))
-                    
-                    (self.uk6,
-                     self.num_units,) = struct.unpack('=13sI', in_fh.read(17))
-                    
-                    
-                    
-                    
-                    
-            
-            # MapObj init
-            def __init__(self, in_fh, TYPE):
-                print(f'reading header @ {in_fh.tell()}')
-                self.header = self.ObjectHeader(in_fh)
-                
-                
-                match self.header.obj_class:
-                    case 0x24:
-                        self.data = self.Building(in_fh, TYPE, self.header)
-                    case 0x3C:
-                        self.data = self.Company(in_fh)
-                        
-                
-                
-                
-                
-        
         
         def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
@@ -507,9 +259,9 @@ class tgmFile:
                 self.unknown0 = struct.unpack('=4s', in_fh.read(4))
                 self.objs = []
                 
-                #while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 18):
-                for _ in range(6):
-                    self.objs.append(self.MapObj(in_fh, TYPE))
+                while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 19):
+                #for _ in range(6):
+                    self.objs.append(getMapObjClass(in_fh)(in_fh, TYPE))
                     #pprint(vars(self.objs[-1]))   
                     #print('')
                 
@@ -526,15 +278,369 @@ class tgmFile:
                 self.TYPE = self.TypeChunk(self.filename, self.iff)
                 #self.PLRS = self.PlrsChunk(self.filename, self.iff)
                 self.OBJS = self.ObjsChunk(self.filename, self.iff, self.TYPE)
-        return
 
+
+class MapObj:
+    def __init__(self):
+        print(f'reading header @ {self.fh.tell()}')
+        self.header = self.ObjectHeader(self.fh)
+                
+    class ObjectHeader:
+        def __init__(self, fh):
+            (self.obj_class,
+             self.player,
+             self.index,
+             self.editor_id,
+             self.hotspot_se,
+             self.hotspot_sw,) = struct.unpack('=BBHIff', fh.read(16))
+
+
+class Building(MapObj):
+    
+    class MilitiaData:
+        def __init__(self, fh):
+            (self.padding,
+             self.supply_zone,
+             self.unknown1,
+             self.current_militia,
+             self.militia_regen,
+             self.unknown2,
+             self.guard_zone,
+             self.unknown3,
+             self.militia_front,
+             self.militia_support,
+             self.company_size,
+             self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', fh.read(49))
+            (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', fh.read(self.comp_name_len))
+            (self.max_militia,) = struct.unpack('=f', fh.read(4))
+    
+    class Modifiers:
+        def __init__(self, fh):
+            (self.size,
+             self.group_1_commission_cost,
+             self.group_1_commission_cost,
+             self.group_1_commission_cost,
+             self.group_1_commission_cost,
+             self.militia_av,
+             self.militia_dv,
+             self.magic_resistance,
+             self.non_magic_resistance,
+             self.construction_cost,) = struct.unpack('=I9f', fh.read(40))
+            if self.size > 36:
+                (self.kaldunite_resistance,
+                 self.padding,) = struct.unpack(f'=f{self.size-40}s', fh.read(4+self.size-40))
+    
+    
+    def __init__(self, in_fh, TYPE):
+        self.fh = in_fh
+        MapObj.__init__(self)
+        (self.name,
+         self.flag1,
+         self.flag2,) = struct.unpack('=20sBB', self.fh.read(22))
+        if self.flag2 == 13:
+            (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
+        elif self.flag2 == 7:
+            (self.unknown_flag_data,) = struct.unpack('=B', self.fh.read(1))
         
+        (self.unknown1,
+         self.status,
+         self.unknown2,
+         self.pos_se,
+         self.pos_sw,
+         self.current_gold_production,
+         self.current_stone_production,
+         self.current_wood_production,
+         self.current_iron_production,
+         self.current_mana_production,
+         self.unknown3,
+         self.max_hp,
+         self.unknown4,
+         self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', self.fh.read(54))
+        
+        #print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
+        match TYPE.by_index[self.header.index]['subtype']:
+            # Ruins
+            case 0:
+                (self.ruin_data,) = struct.unpack('=13s', self.fh.read(13))
+            
+            # Settlements
+            case 1|5|6|7|8:
+                self.militia_data = self.MilitiaData(self.fh)
+                
+                (self.unknown5,
+                 self.component_bitflag,
+                 self.unknown6,
+                 self.inportant0) = struct.unpack('=10sB4sI', self.fh.read(19))
+                
+                # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
+                start_pos = self.fh.tell()
+                while self.fh.read(2) != b'\xA0\x40':
+                    self.fh.seek(-1, 1)
+                pad_len = self.fh.tell() - start_pos
+                self.fh.seek(start_pos)
+                (padding,) = struct.unpack(f'={pad_len+14}s', self.fh.read(pad_len+14))
+                print(f'  reading building mods @ {self.fh.tell()}')
+                self.building_modifiers = self.Modifiers(self.fh)
+                
+                (self.important1,
+                 self.num_modifiers) = struct.unpack('=2I', self.fh.read(8))
+                if self.num_modifiers == 0:
+                    (self.block_2,) = struct.unpack('=5s', self.fh.read(5))
+                else:
+                    self.gained_modifiers = []
+                    print(f'nm:{self.num_modifiers}')
+                    for _ in range (self.num_modifiers):
+                        new_mod = {}
+                        (new_mod['id'],
+                         new_mod['value'],
+                         new_mod['null'],) = struct.unpack('=HfB', self.fh.read(7))
+                        
+                    (self.unknown,
+                     self.upgrade_cost) = struct.unpack('=Bf', self.fh.read(5))
+                    
+                self.components = []
+                self.ct_components = 0
+                # Counts the number of high bits in the bitflag
+                x = self.component_bitflag
+                for _ in range(0,8):
+                    self.ct_components += x&1
+                    x >>= 1
+                # +1 for adtl blank comp
+                print(f'  reading comps @ {self.fh.tell()}')
+                for i in range(self.ct_components + 1):
+                    new_comp = {}
+                    print(f'    reading comp @ {self.fh.tell()}')
+                    if (check_cost := struct.unpack('=f', self.fh.read(4))[0]) > 1:
+                        new_comp['component_cost'] = check_cost
+                    else:
+                        self.fh.seek(-4, 1)
+                    
+                    (new_comp['size'],) = struct.unpack('=I', self.fh.read(4))
+                    upgrade_name = struct.unpack('=20s', self.fh.read(20))[0].split(sep=b'\00', maxsplit=1)[0]
+                    print(f'    un:{upgrade_name} {len(upgrade_name)}')
+                    self.fh.seek(-20 + len(upgrade_name), 1)
+                    if len(upgrade_name) > 1:
+                        new_comp['upgrade_name'] = upgrade_name
+                    (new_comp['data'],) = struct.unpack(f"={new_comp['size']}s", self.fh.read(new_comp['size']))
+                    self.components.append(new_comp)
+            case 2:
+                self.militia_data = self.MilitiaData(self.fh)
+                # Skips null bytes
+                pad_size = 0
+                while self.fh.read(1) == b'\00':
+                    pad_size += 1
+                self.fh.seek(-1,1)
+                
+            case 3:
+                self.militia_data = self.MilitiaData(self.fh)
+                (self.unknown5,) = struct.unpack('=17s', self.fh.read(17))
+                
+            case 4:
+                (self.unknown5,
+                 self.base_gold_production,
+                 self.base_stone_production,
+                 self.base_wood_production,
+                 self.base_iron_production,
+                 self.base_mana_production,) = struct.unpack('=26sfffff', self.fh.read(46))
+
+class Company(MapObj):  
+    def __init__(self, in_fh, TYPE):
+        self.fh = in_fh
+        MapObj.__init__(self)
+        
+        (self.captain_index,
+         self.front_index,
+         self.support1_index,
+         self.support2_index,
+         self.b1,
+         self.b2,
+         self.b3,
+         self.b4,
+         self.name,) = struct.unpack('=4H4B22s', self.fh.read(34))
+        
+        (self.uk0,
+         self.captain_id,
+         self.occupy_flag0,
+         self.control_zone,
+         self.occupy_flag1,
+         self.required,
+         self.uk2,
+         stone,
+         wood,
+         iron,
+         mana,
+         self.speed,
+         self.f0,
+         self.f1,
+         self.attack_efficiency,
+         self.formation_atk_mod,
+         self.f4,
+         self.experience,
+         self.uk3,
+         self.current_morale,
+         self.max_morale,
+         self.uk4,
+         self.zone_of_control,) = struct.unpack('=6sHIfII4s11f13s2f16sf', self.fh.read(113))
+        
+        self.upkeep = {
+            'stone': stone,
+            'wood': wood,
+            'iron': iron,
+            'mana': mana,
+            }
+        
+        # Find padding bytes & beginning of company mods, subtract back to start of unit positions
+        zoc_to_pos_size = findBytes(b'\x00\x00\x00\x00\x04\x00\x00\x00', self.fh) - self.fh.tell() - 48
+        
+        print(f'ztps:{zoc_to_pos_size}')
+        (self.zoc_to_pos,
+         u0_pos_se,
+         u0_pos_sw,
+         u1_pos_se,
+         u1_pos_sw,
+         u2_pos_se,
+         u2_pos_sw,
+         u3_pos_se,
+         u3_pos_sw,
+         u4_pos_se,
+         u4_pos_sw,
+         u5_pos_se,
+         u5_pos_sw,) = struct.unpack(f'={zoc_to_pos_size}s12f4x', self.fh.read(zoc_to_pos_size + 52))
+        
+        self.unit_positions = [
+            {'se': u0_pos_se,
+             'sw': u0_pos_sw,},
+            {'se': u1_pos_se,
+             'sw': u1_pos_sw,},
+            {'se': u2_pos_se,
+             'sw': u2_pos_sw,},
+            {'se': u3_pos_se,
+             'sw': u3_pos_sw,},
+            {'se': u4_pos_se,
+             'sw': u4_pos_sw,},
+            {'se': u5_pos_se,
+             'sw': u5_pos_sw,},
+            ]
+        
+        (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
+        self.company_modifiers_provided = {'start': start}
+        for _ in range(num_modifiers):
+            (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
+            self.company_modifiers_provided[comp_mods_lookup[key]] = value
+        
+        (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
+        self.unit_modifiers_provided = {'start': start}
+        for _ in range(num_modifiers):
+            (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
+            self.unit_modifiers_provided[unit_mods_lookup[key]] = value
+        self.fh.seek(4, 1) # skips 4byte padding
+        
+        (start,)  = struct.unpack('=8s', self.fh.read(8))
+        self.all_company_modifiers = {'start': start}
+        for m in comp_mods_lookup.values():
+            (self.all_company_modifiers[m],) = struct.unpack('=f', self.fh.read(4))
+        self.fh.seek(4, 1) # skips 4byte padding
+        
+        (self.uk6,
+         self.num_units,) = struct.unpack('=13sI', self.fh.read(17))
+        
+        self.units = [Unit(self.fh, TYPE) for _ in range(self.num_units)]
+        
+        (self.f11,
+         self.f12,
+         self.detection_zone,
+         self.uk7,
+         self.f13,) = struct.unpack('=ff9sff', self.fh.read(25))
+
+class Unit(MapObj):
+    def __init__(self, in_fh, TYPE):
+        self.fh = in_fh
+        (self.unit_index,) = struct.unpack('=B', self.fh.read(1))
+              
+        MapObj.__init__(self)
+        
+        (self.flag1, self.flag2,) = struct.unpack('=BB', self.fh.read(2))
+        match self.flag2:
+            case 0x09:
+                (self.current_hp,
+                 self.uk0) = struct.unpack('=fH', self.fh.read(6))
+            case 0x0B:
+                (self.uk0) = struct.unpack('=H', self.fh.read(2))
+            case 0x0D:
+                (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
+        
+        (self.uk1,
+         self.pos_se,
+         self.pos_sw,
+         self.f0,
+         self.f1,
+         self.f2,
+         self.f3,
+         self.f4,
+         self.current_speed,
+         self.uk2,
+         start,
+         modifiers_size,) = struct.unpack('=24sHH6f42sII', self.fh.read(102))
+        
+        self.modifiers_gained = {'start': start}
+        for m in unit_mods_gained_list:
+            (self.modifiers_gained[m],) = struct.unpack('=f', self.fh.read(4))
+        
+        (self.f5,
+         self.uk3,
+         self.hotspot_se,
+         self.hotspot_sw,
+         self.f6,
+         self.f7,
+         self.base_speed,) = struct.unpack('=4xf32s5f', self.fh.read(60))
+        
+        self.fh.seek(findBytes(b'\x00\x40\x40\x00\x00\x00\x00\x01', self.fh, search_length=100) + 8)
+        print(f'    searched to {self.fh.tell()} for max_hp')
+        (self.max_hp,) = struct.unpack('=f', self.fh.read(4))
+        
+        match TYPE.by_index[self.header.index]['subtype']:
+            case 1:
+                (self.f8,
+                 self.mana,
+                 self.uk4,) = struct.unpack('=ff5s', self.fh.read(13))
+            case 2:
+                (self.f8,
+                 self.mana,
+                 self.uk4,) = struct.unpack('=ff9s', self.fh.read(17))
+
+      
+def findBytes(query, fh, search_length=None):
+    start_pos = fh.tell()
+    cur_val = fh.read(len(query))
+    while cur_val != query:
+        if search_length and fh.tell() - start_pos > search_length:
+            return None
+        cur_val = cur_val[1:] + fh.read(1)
+    
+    find_pos = fh.tell() - len(query)
+    fh.seek(start_pos)
+    return find_pos
+
+def getMapObjClass(in_fh):
+    (obj_class,) = struct.unpack('=B', in_fh.read(1))
+    in_fh.seek(-1, 1)
+    print(type(obj_class))
+    print(f'obj_class: {obj_class:#x} @ {in_fh.tell()}')
+    match obj_class:
+        case 0x10:
+            return Unit
+        case 0x24:
+            return Building
+        case 0x3C:
+            return Company
+        case _:
+            return MapObj
+         
                 
                 
                 
-                
-testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
-testTGM.load()
+#testTGM = tgmFile("../../hero-randomizer/bonehenge-KG.tgm")
+#testTGM.load()
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 

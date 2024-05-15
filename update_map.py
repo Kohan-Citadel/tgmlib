@@ -6,6 +6,7 @@ name_mapping_path = ''
 old_map = tgmlib.tgmFile(old_map_path)
 new_map = tgmlib.tgmFile(new_map_path)
 old_map.load()
+print('---------------------------------------------------------------------')
 new_map.load()
 
 # Use this mapping to go from pre KG-0.9.5 (includes AG-1.3.7 and 1.3.10) to KG-0.9.6
