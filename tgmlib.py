@@ -272,6 +272,21 @@ class tgmFile:
                     # This allows for lookup by either name or index, and both will point to the same mutable object
                     self.by_name[name] = new_obj
                     self.by_index[i] = new_obj
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('HH',
+                                self.unknown0,
+                                self.num_objs,)
+            for k, v in self.by_index.items():
+                data += struct.pack('<32sBB',
+                                    v['name'].encode('ascii'),
+                                    v['subtype'],
+                                    v['type'],)
+           
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'TYPE', len(data)) + data
+            return data
     
     
     class HrosChunk:
@@ -280,7 +295,7 @@ class tgmFile:
                 in_fh.seek(iff.data.children[14].data_offset)
                 start_pos = in_fh.tell()
                 
-                (self.uk0,) = struct.unpack('=i', in_fh.read(4))
+                (self.uk0,) = struct.unpack('=I', in_fh.read(4))
                 
                 self.heroes = {}
                 while in_fh.tell() + 22 < iff.data.children[14].length + start_pos:
@@ -296,6 +311,25 @@ class tgmFile:
                      hero['editor_id'],) = struct.unpack(f'={name_len}siifihii', in_fh.read(26+name_len))
                     print(name)
                     self.heroes[name.decode('ascii')] = hero
+            
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.uk0)
+            for name, hero in self.heroes.items():
+                data += struct.pack(f'<B{len(name)}siifihii',
+                                    len(name),
+                                    name.encode('ascii'),
+                                    hero['status'],
+                                    hero['i1'],
+                                    hero['experience'],
+                                    hero['awakened'],
+                                    hero['s1'],
+                                    hero['player_id'],
+                                    hero['editor_id'],)
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'HROS', len(data)) + data
+            return data
     
     class PlrsChunk:
         
@@ -345,13 +379,14 @@ class tgmFile:
                 self.iff.load()
                 if self.iff.data.formtype != "TGSV":
                     print(f"Error: invalid file type: {self.iff.data.formtype}")
-                self.EDTR = self.EdtrChunk(self.filename, self.iff)
-                self.MGRD = self.MgrdChunk(self.filename, self.iff, self.EDTR)
-                self.FTRS = self.FtrsChunk(self.filename, self.iff)
-                self.TYPE = self.TypeChunk(self.filename, self.iff)
-                self.HROS = self.HrosChunk(self.filename, self.iff)
-                #self.PLRS = self.PlrsChunk(self.filename, self.iff)
-                self.OBJS = self.ObjsChunk(self.filename, self.iff, self.TYPE)
+                self.chunks = {}
+                self.chunks['EDTR'] = self.EdtrChunk(self.filename, self.iff)
+                self.chunks['MGRD'] = self.MgrdChunk(self.filename, self.iff, self.chunks['EDTR'])
+                self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff)
+                self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
+                self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
+                #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
+                self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
 
 
 class MapObj:
@@ -416,6 +451,7 @@ class Building(MapObj):
     
     def __init__(self, in_fh, TYPE):
         self.fh = in_fh
+        self.TYPE_ref = TYPE
         MapObj.__init__(self)
         (self.name,
          self.flag1,
@@ -441,7 +477,7 @@ class Building(MapObj):
          self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', self.fh.read(54))
         
         #print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
-        match TYPE.by_index[self.header.index]['subtype']:
+        match self.TYPE_ref.by_index[self.header.index]['subtype']:
             # Ruins
             case 0:
                 (self.ruin_data,) = struct.unpack('=13s', self.fh.read(13))
@@ -638,6 +674,7 @@ class Company(MapObj):
 class Unit(MapObj):
     def __init__(self, in_fh, TYPE):
         self.fh = in_fh
+        self.TYPE_ref = TYPE
         (self.unit_index,) = struct.unpack('=B', self.fh.read(1))
               
         MapObj.__init__(self)
@@ -692,7 +729,7 @@ class Unit(MapObj):
                  self.mana,
                  self.uk5,) = struct.unpack('=ff9s', self.fh.read(17))
     
-    def pack(self, TYPE):
+    def pack(self):
         data = b''
         data += struct.pack('<B', self.unit_index,)
         data += self.header.pack()
@@ -732,7 +769,7 @@ class Unit(MapObj):
                             self.uk4,
                             self.max_hp,)
         
-        match TYPE.by_index[self.header.index]['subtype']:
+        match self.TYPE_ref.by_index[self.header.index]['subtype']:
             case 1:
                 data += struct.pack('<ff5s',
                                     self.f8,
@@ -778,8 +815,8 @@ def addChunkPadding(data):
     return data + b'\x00' * ((4 - len(data) % 4) % 4)
                 
                 
-testTGM = tgmFile('ECM1.TGM')
-testTGM.load()
+#testTGM = tgmFile('ECM1.TGM')
+#testTGM.load()
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 

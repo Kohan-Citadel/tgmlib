@@ -94,22 +94,22 @@ name_mapping = {
     'NEW_AHRIMAN_CITADEL': 'AHRIMAN_CITADEL',
     'NEW_AHRIMAN_CITADEL ruin': 'AHRIMAN_CITADEL ruin',
     }
-keys = list(old_map.HROS.heroes.keys())
+keys = list(old_map.chunks['HROS'].heroes.keys())
 for k in keys:
     if k in name_mapping:
-        old_map.HROS.heroes[name_mapping[k]] = old_map.HROS.heroes.pop(k)
+        old_map.chunks['HROS'].heroes[name_mapping[k]] = old_map.chunks['HROS'].heroes.pop(k)
 
-sym_dif = old_map.HROS.heroes.keys() ^ ref_map.HROS.heroes.keys()
-only_old = sym_dif & old_map.HROS.heroes.keys()
-only_ref = sym_dif & ref_map.HROS.heroes.keys()
+sym_dif = old_map.chunks['HROS'].heroes.keys() ^ ref_map.chunks['HROS'].heroes.keys()
+only_old = sym_dif & old_map.chunks['HROS'].heroes.keys()
+only_ref = sym_dif & ref_map.chunks['HROS'].heroes.keys()
 for k in only_old:
-    old_map.HROS.heroes.pop(k)
+    old_map.chunks['HROS'].heroes.pop(k)
 for k in only_ref:
-    old_map.HROS.heroes[k] = {
+    old_map.chunks['HROS'].heroes[k] = {
         'status': 0,
         'i1': 0,
         'experience': 0.0,
-        'awakened': 0.0,
+        'awakened': 0,
         's1': 0,
         'player_id': -1,
         'editor_id': 0,
@@ -117,17 +117,17 @@ for k in only_ref:
 
 index_mapping = {}
 
-for k, v in old_map.TYPE.by_name.items():
+for k, v in old_map.chunks['TYPE'].by_name.items():
     if k in name_mapping:
         name = name_mapping[k]
     else:
         name = k
         
-    new_index = ref_map.TYPE.by_name[name]['index']
+    new_index = ref_map.chunks['TYPE'].by_name[name]['index']
     old_index = v['index']
     index_mapping[old_index] = new_index
 
-for f in old_map.FTRS.features:
+for f in old_map.chunks['FTRS'].features:
     if f['index'] != 0xFFFF:
         f['index'] = index_mapping[f['index']] 
 
@@ -158,7 +158,7 @@ def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
 
 
 hero_name_re = re.compile(r"([a-zA-Z_ ']+?)(Enlightened|Restored|Ascended){0,1}$")
-for obj in old_map.OBJS.objs:
+for obj in old_map.chunks['OBJS'].objs:
     print(f'obj id:{obj.header.editor_id} ix:{obj.header.index} -> {index_mapping[obj.header.index]}')
     obj.header.index = index_mapping[obj.header.index]
     match obj.header.obj_class:
@@ -187,7 +187,7 @@ for obj in old_map.OBJS.objs:
             for unit in obj.units:
                 unit.header.index = index_mapping[unit.header.index]
                 unit_ini = ConfigParser(inline_comment_prefixes=(';',))
-                ref_type = ref_map.TYPE.by_index[unit.header.index]
+                ref_type = ref_map.chunks['TYPE'].by_index[unit.header.index]
                 #set modifiers to default
                 start = unit.modifiers_gained['start']
                 unit.modifiers_gained = deepcopy(tgmlib.unit_mods_default)
@@ -247,26 +247,21 @@ for obj in old_map.OBJS.objs:
                 elif op == 'multiply':
                     obj.modifiers_gained[k][0] *= float(v)
 
+old_map.chunks['TYPE'] = ref_map.chunks['TYPE']
+
 #copy each chunk from old_map verbatim, unless it's been updated
 with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
     #write placeholder FORM
     out_fp.write(b'FORM\xFF\xFF\xFF\xFFTGSV')
-    for chunk in old_map.iff.data.children  :
-        match chunk.type:
-            case 'FTRS':
-                out_fp.write(old_map.FTRS.pack())
-            case 'TYPE':
-                pass
-            case 'HROS':
-                pass
-            case 'OBJS':
-                pass
-            case _:
-                out_fp.write(struct.pack('>4sI', chunk.type.encode('ascii'), chunk.length))
-                in_fp.seek(chunk.data_offset)
-                out_fp.write(in_fp.read(chunk.length))
-                if last_bytes := (out_fp.tell() % 4):
-                    out_fp.write(b'\x00'*(4-last_bytes))
+    for iff_chunk in old_map.iff.data.children:
+        if iff_chunk.type in old_map.chunks and hasattr(old_map.chunks[iff_chunk.type], 'pack'):
+            out_fp.write(old_map.chunks[iff_chunk.type].pack())
+        else:
+            out_fp.write(struct.pack('>4sI', iff_chunk.type.encode('ascii'), iff_chunk.length))
+            in_fp.seek(iff_chunk.data_offset)
+            out_fp.write(in_fp.read(iff_chunk.length))
+            if last_bytes := (out_fp.tell() % 4):
+                out_fp.write(b'\x00'*(4-last_bytes))
             
 
 
