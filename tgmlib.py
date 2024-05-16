@@ -358,11 +358,10 @@ class tgmFile:
 
     
     class ObjsChunk:
-        
         def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[16].data_offset)
-                self.unknown0 = struct.unpack('=4s', in_fh.read(4))
+                (self.unknown0,) = struct.unpack('=4s', in_fh.read(4))
                 self.objs = []
                 
                 while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 19):
@@ -370,7 +369,15 @@ class tgmFile:
                     self.objs.append(getMapObjClass(in_fh)(in_fh, TYPE))
                     #pprint(vars(self.objs[-1]))   
                     #print('')
-                
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<4s', self.unknown0)
+            for obj in self.objs:
+                data += obj.pack()
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'OBJS', len(data)) + data
+            return data
                 
     
     def load(self):
@@ -411,6 +418,9 @@ class MapObj:
                                self.editor_id,
                                self.hotspot_se,
                                self.hotspot_sw,)
+    
+    def pack(self):
+        return b''
 
 
 class Building(MapObj):
@@ -565,6 +575,7 @@ class Building(MapObj):
 class Company(MapObj):  
     def __init__(self, in_fh, TYPE):
         self.fh = in_fh
+        self.TYPE_ref = TYPE
         MapObj.__init__(self)
         
         (self.captain_index,
@@ -663,14 +674,106 @@ class Company(MapObj):
         (self.uk6,
          self.num_units,) = struct.unpack('=13sI', self.fh.read(17))
         
-        self.units = [Unit(self.fh, TYPE) for _ in range(self.num_units)]
+        self.units = [Unit(self.fh, self.TYPE_ref) for _ in range(self.num_units)]
         
         (self.f11,
          self.f12,
          self.detection_zone,
          self.uk7,
          self.f13,) = struct.unpack('=ff9sff', self.fh.read(25))
-
+        
+    def pack(self):
+        data = self.header.pack()
+        data += struct.pack('<4H4B22s',
+                            self.captain_index,
+                            self.front_index,
+                            self.support1_index,
+                            self.support2_index,
+                            self.b1,
+                            self.b2,
+                            self.b3,
+                            self.b4,
+                            self.name,)
+        data += struct.pack('<6sHIfII4s11f13s2f16sf',
+                            self.uk0,
+                            self.captain_id,
+                            self.occupy_flag0,
+                            self.control_zone,
+                            self.occupy_flag1,
+                            self.required,
+                            self.uk2,
+                            self.upkeep['stone'],
+                            self.upkeep['wood'],
+                            self.upkeep['iron'],
+                            self.upkeep['mana'],
+                            self.speed,
+                            self.f0,
+                            self.f1,
+                            self.attack_efficiency,
+                            self.formation_atk_mod,
+                            self.f4,
+                            self.experience,
+                            self.uk3,
+                            self.current_morale,
+                            self.max_morale,
+                            self.uk4,
+                            self.zone_of_control,)
+        data += struct.pack(f'={len(self.zoc_to_pos)}s12f4x',
+                            self.zoc_to_pos,
+                            self.unit_positions[0]['se'],
+                            self.unit_positions[0]['sw'],
+                            self.unit_positions[1]['se'],
+                            self.unit_positions[1]['sw'],
+                            self.unit_positions[2]['se'],
+                            self.unit_positions[2]['sw'],
+                            self.unit_positions[3]['se'],
+                            self.unit_positions[3]['sw'],
+                            self.unit_positions[4]['se'],
+                            self.unit_positions[4]['sw'],
+                            self.unit_positions[5]['se'],
+                            self.unit_positions[5]['sw'],)
+        
+        data += struct.pack('=II',
+                            self.company_modifiers_provided[0][1],
+                            len(self.company_modifiers_provided[1:]),)
+        for name, value in self.company_modifiers_provided[1:]:
+            code = next(k for k, v in comp_mods_lookup.items() if v == name)
+            data += struct.pack('<Hfx',
+                                code,
+                                value)
+            
+        data += struct.pack('=II',
+                            self.unit_modifiers_provided[0][1],
+                            len(self.unit_modifiers_provided[1:]),)
+        for (name, value,) in self.unit_modifiers_provided[1:]:
+            code = next(k for k, v in unit_mods_lookup.items() if v == name)
+            data += struct.pack('<Hfx',
+                                code,
+                                value)
+        data += struct.pack('<4x')
+        
+        data += struct.pack('<8s', self.modifiers_gained['start'])
+        for name, value in self.modifiers_gained.items():
+            if name != 'start':
+                data += struct.pack('<f', value[0])
+        data += struct.pack('<4x')
+        
+        data += struct.pack('<13sI',
+                            self.uk6,
+                            self.num_units,)
+        
+        for unit in self.units:
+            data += unit.pack()
+        
+        data += struct.pack('<ff9sff',
+                            self.f11,
+                            self.f12,
+                            self.detection_zone,
+                            self.uk7,
+                            self.f13,)
+        return data
+            
+        
 class Unit(MapObj):
     def __init__(self, in_fh, TYPE):
         self.fh = in_fh
@@ -719,7 +822,7 @@ class Unit(MapObj):
         (self.uk4,
          self.max_hp,) = struct.unpack(f'={hp_pos-start_search}sf', self.fh.read(4+hp_pos-start_search))
         
-        match TYPE.by_index[self.header.index]['subtype']:
+        match self.TYPE_ref.by_index[self.header.index]['subtype']:
             case 1:
                 (self.f8,
                  self.mana,
@@ -736,11 +839,11 @@ class Unit(MapObj):
         data += struct.pack('<BB', self.flag1, self.flag2,)
         match self.flag2:
             case 0x09:
-                 data += struct.unpack('<fH', self.current_hp, self.uk0,)
+                 data += struct.pack('<fH', self.current_hp, self.uk0,)
             case 0x0B:
-                data += struct.unpack('<H', self.uk0,)
+                data += struct.pack('<H', self.uk0,)
             case 0x0D:
-                data += struct.unpack('<f', self.current_hp,)
+                data += struct.pack('<f', self.current_hp,)
         data += struct.pack('<24sHH6f42sII',
                             self.uk1,
                             self.pos_se,
@@ -756,7 +859,7 @@ class Unit(MapObj):
                             (len(self.modifiers_gained) - 1) * 4,)
         for k, v in self.modifiers_gained.items():
             if k != 'start':
-                data += struct.pack('f', v)
+                data += struct.pack('f', v[0])
         data += struct.pack(f'<if32s5f{len(self.uk4)}sf',
                             0,
                             self.f5,
@@ -768,7 +871,7 @@ class Unit(MapObj):
                             self.base_speed,
                             self.uk4,
                             self.max_hp,)
-        
+        #print(f'unit index: {self.unit_index}, index: {self.header.index}, type: {self.TYPE_ref.by_index[self.header.index]["type"]}, subtype: {self.TYPE_ref.by_index[self.header.index]["subtype"]}')
         match self.TYPE_ref.by_index[self.header.index]['subtype']:
             case 1:
                 data += struct.pack('<ff5s',
@@ -815,8 +918,8 @@ def addChunkPadding(data):
     return data + b'\x00' * ((4 - len(data) % 4) % 4)
                 
                 
-#testTGM = tgmFile('ECM1.TGM')
-#testTGM.load()
+testTGM = tgmFile('ECM1-CLEANED.TGM')
+testTGM.load()
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 

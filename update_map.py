@@ -5,7 +5,7 @@ import re
 from copy import deepcopy
 import struct
 
-old_map_path = 'ECM1.TGM'
+old_map_path = 'ECM1-CLEANED.TGM'
 new_map_path = 'KG-0.9.6.TGM'
 dest_path = 'ECM1-UPDATE.TGM'
 name_mapping_path = ''
@@ -93,19 +93,13 @@ name_mapping = {
     'NEST ruin': 'RHAKSHA_NEST ruin',
     'NEW_AHRIMAN_CITADEL': 'AHRIMAN_CITADEL',
     'NEW_AHRIMAN_CITADEL ruin': 'AHRIMAN_CITADEL ruin',
+    'NOVITIATE': 'DISCIPLE',
+    'NOVITIATE corpse': 'DISCIPLE corpse',
     }
-keys = list(old_map.chunks['HROS'].heroes.keys())
-for k in keys:
-    if k in name_mapping:
-        old_map.chunks['HROS'].heroes[name_mapping[k]] = old_map.chunks['HROS'].heroes.pop(k)
 
-sym_dif = old_map.chunks['HROS'].heroes.keys() ^ ref_map.chunks['HROS'].heroes.keys()
-only_old = sym_dif & old_map.chunks['HROS'].heroes.keys()
-only_ref = sym_dif & ref_map.chunks['HROS'].heroes.keys()
-for k in only_old:
-    old_map.chunks['HROS'].heroes.pop(k)
-for k in only_ref:
-    old_map.chunks['HROS'].heroes[k] = {
+# stores editor ids of duplicate heroes to be replaced with captain
+heroes_to_remove = []
+hero_template = {
         'status': 0,
         'i1': 0,
         'experience': 0.0,
@@ -114,6 +108,28 @@ for k in only_ref:
         'player_id': -1,
         'editor_id': 0,
         }
+
+keys = list(old_map.chunks['HROS'].heroes.keys())
+for k in keys:
+    if k in name_mapping:
+        print(f'merging {k} into {name_mapping[k]}')
+        # Use HROS entry with higher state value
+        src = old_map.chunks['HROS'].heroes.pop(k)
+        if name_mapping[k] not in old_map.chunks['HROS'].heroes:
+            old_map.chunks['HROS'].heroes[name_mapping[k]] = hero_template.copy()
+        if src['status'] > old_map.chunks['HROS'].heroes[name_mapping[k]]['status']:
+            old_map.chunks['HROS'].heroes[name_mapping[k]] = src.copy()
+        else:
+            print(f'Duplicate hero {k} with ID {src["editor_id"]} marked for removal')
+            heroes_to_remove.append(src['editor_id'])
+
+sym_dif = old_map.chunks['HROS'].heroes.keys() ^ ref_map.chunks['HROS'].heroes.keys()
+only_old = sym_dif & old_map.chunks['HROS'].heroes.keys()
+only_ref = sym_dif & ref_map.chunks['HROS'].heroes.keys()
+for k in only_old:
+    old_map.chunks['HROS'].heroes.pop(k)
+for k in only_ref:
+    old_map.chunks['HROS'].heroes[k] = hero_template.copy()
 
 index_mapping = {}
 
@@ -141,10 +157,10 @@ def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
     for k, v in unit_ini[eb_name].items():
         K = k.upper()
         op = unit.modifiers_gained[K][1]
-        print(f'  op: {op}')
+        #print(f'  op: {op}')
         if op == 'add':
             unit.modifiers_gained[K][0] += int(v)
-            print(f'  new val: {unit.modifiers_gained[K][0]}')
+            #print(f'  new val: {unit.modifiers_gained[K][0]}')
         elif op == 'multiply':
             unit.modifiers_gained[K][0] *= float(v)
             
@@ -186,6 +202,10 @@ for obj in old_map.chunks['OBJS'].objs:
             
             for unit in obj.units:
                 unit.header.index = index_mapping[unit.header.index]
+                
+                if unit.header.editor_id in heroes_to_remove:
+                    unit.header.index = ref_map.chunks['TYPE'].by_name['CAPTAIN']['index']
+                
                 unit_ini = ConfigParser(inline_comment_prefixes=(';',))
                 ref_type = ref_map.chunks['TYPE'].by_index[unit.header.index]
                 #set modifiers to default
@@ -210,7 +230,7 @@ for obj in old_map.chunks['OBJS'].objs:
                         case _:
                             level = 0
                     
-                    print(f'  {ref_type["name"]} {name} {level}')
+                    #print(f'  {ref_type["name"]} {name} {level}')
                     filepath = Path(f'./Data/ObjectData/Heroes/{name}.INI').resolve()
                     unit_ini.read(filepath)
                     unitUpdateModifiers(unit_ini, unit.unit_index, hero_level=level)
@@ -226,7 +246,8 @@ for obj in old_map.chunks['OBJS'].objs:
                     unit.max_hp = float(unit_ini['ObjectData']['MaxHitPoints'])
                     unitUpdateModifiers(unit_ini, unit.unit_index)
                 
-                unit.current_speed = unit.base_speed = float(unit_ini['UnitData']['MovementRate'])
+                # divide by 14 to convert from display speed to internal speed
+                unit.current_speed = unit.base_speed = float(unit_ini['UnitData']['MovementRate'])/14
                 if unit.base_speed < obj.speed:
                     obj.speed = unit.base_speed
     
@@ -239,7 +260,7 @@ for obj in old_map.chunks['OBJS'].objs:
                     elif op == 'multiply':
                         unit.modifiers_gained[k][0] *= float(v)
             
-            print(obj.modifiers_gained)
+            #print(obj.modifiers_gained)
             for (k, v,) in obj.company_modifiers_provided[1:]:
                 op = obj.modifiers_gained[k][1]
                 if op == 'add':
@@ -247,7 +268,10 @@ for obj in old_map.chunks['OBJS'].objs:
                 elif op == 'multiply':
                     obj.modifiers_gained[k][0] *= float(v)
 
-old_map.chunks['TYPE'] = ref_map.chunks['TYPE']
+old_map.chunks['TYPE'].unknown0 = ref_map.chunks['TYPE'].unknown0
+old_map.chunks['TYPE'].num_objs = ref_map.chunks['TYPE'].num_objs
+old_map.chunks['TYPE'].by_name = ref_map.chunks['TYPE'].by_name
+old_map.chunks['TYPE'].by_index = ref_map.chunks['TYPE'].by_index
 
 #copy each chunk from old_map verbatim, unless it's been updated
 with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
@@ -262,6 +286,10 @@ with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
             out_fp.write(in_fp.read(iff_chunk.length))
             if last_bytes := (out_fp.tell() % 4):
                 out_fp.write(b'\x00'*(4-last_bytes))
+    
+    file_size = out_fp.seek(0,2)
+    out_fp.seek(4)
+    out_fp.write(struct.pack('>I', file_size - 12))
             
 
 
