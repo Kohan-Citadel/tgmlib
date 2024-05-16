@@ -254,7 +254,7 @@ with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
     for chunk in old_map.iff.data.children  :
         match chunk.type:
             case 'FTRS':
-                pass
+                out_fp.write(old_map.FTRS.pack())
             case 'TYPE':
                 pass
             case 'HROS':
@@ -265,8 +265,8 @@ with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
                 out_fp.write(struct.pack('>4sI', chunk.type.encode('ascii'), chunk.length))
                 in_fp.seek(chunk.data_offset)
                 out_fp.write(in_fp.read(chunk.length))
-                if padding_size := (out_fp.tell() % 4):
-                    out_fp.write(b'\x00'*padding_size)
+                if last_bytes := (out_fp.tell() % 4):
+                    out_fp.write(b'\x00'*(4-last_bytes))
             
 
 

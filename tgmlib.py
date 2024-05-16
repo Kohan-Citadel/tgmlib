@@ -229,6 +229,24 @@ class tgmFile:
                     if feature['flag'] == 0x0F09:
                         (feature['data'],) = struct.unpack('4s', in_fh.read(4))
                     self.features.append(feature)
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.load)
+            for feature in self.features:
+                data += struct.pack('=hHIffH',
+                                    feature['header'],
+                                    feature['index'],
+                                    feature['editor_id'],
+                                    feature['pos_se'],
+                                    feature['pos_sw'],
+                                    feature['flag'],)
+                if feature['flag'] == 0x0F09:
+                    data += struct.pack('4s', feature['data'],)
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'FTRS', len(data)) + data
+            return data                
     
     
     class TypeChunk:
@@ -755,7 +773,9 @@ def getMapObjClass(in_fh):
         case _:
             return MapObj
          
-                
+def addChunkPadding(data):
+    print(f'Padding Length: {((4 - len(data) % 4) % 4)}')
+    return data + b'\x00' * ((4 - len(data) % 4) % 4)
                 
                 
 testTGM = tgmFile('ECM1.TGM')
