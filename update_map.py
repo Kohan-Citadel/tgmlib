@@ -5,9 +5,9 @@ import re
 from copy import deepcopy
 import struct
 
-old_map_path = 'throneoftheancientsdex29.tgm'
+old_map_path = '../../../Mod-Test-Only/Maps/ECM13-1.3.7.TGM'
 new_map_path = 'KG-0.9.6.TGM'
-dest_path = 'THRONE-UPDATE.TGM'
+dest_path = '../../../Mod-Test-Only/Maps/ECM13-KG-0.9.6.TGM'
 name_mapping_path = ''
 old_map = tgmlib.tgmFile(old_map_path)
 ref_map = tgmlib.tgmFile(new_map_path)
@@ -152,7 +152,6 @@ for k in old_heroes:
     if k in name_mapping:
         print(f'merging {k} into {name_mapping[k]}')
         # Use HROS entry with higher state value
-        #TODO implement a way to control read order (to better control collisions)
         src = old_map.chunks['HROS'].heroes.pop(k)
         if name_mapping[k] not in old_map.chunks['HROS'].heroes:
             old_map.chunks['HROS'].heroes[name_mapping[k]] = hero_template.copy()
@@ -318,33 +317,4 @@ old_map.chunks['TYPE'].num_objs = ref_map.chunks['TYPE'].num_objs
 old_map.chunks['TYPE'].by_name = ref_map.chunks['TYPE'].by_name
 old_map.chunks['TYPE'].by_index = ref_map.chunks['TYPE'].by_index
 
-#copy each chunk from old_map verbatim, unless it's been updated
-with open(old_map_path, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
-    #write placeholder FORM
-    out_fp.write(b'FORM\xFF\xFF\xFF\xFFTGSV')
-    for iff_chunk in old_map.iff.data.children:
-        if iff_chunk.type in old_map.chunks and hasattr(old_map.chunks[iff_chunk.type], 'pack'):
-            out_fp.write(old_map.chunks[iff_chunk.type].pack())
-        else:
-            out_fp.write(struct.pack('>4sI', iff_chunk.type.encode('ascii'), iff_chunk.length))
-            in_fp.seek(iff_chunk.data_offset)
-            out_fp.write(in_fp.read(iff_chunk.length))
-            if last_bytes := (out_fp.tell() % 4):
-                out_fp.write(b'\x00'*(4-last_bytes))
-    
-    file_size = out_fp.seek(0,2)
-    out_fp.seek(4)
-    out_fp.write(struct.pack('>I', file_size - 12))
-            
-
-
-# Items to update:
-    #main index and all references
-        #copy correct index (TYPE) from correct blank map
-
-
-    
-
-#Adtl TODO
-
-    #Add repacking to .TGM
+old_map.write(dest_path)

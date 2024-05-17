@@ -5,6 +5,7 @@ import struct
 from pathlib import Path
 from dataclasses import dataclass, field
 from pprint import pprint
+from copy import deepcopy
 
 comp_mods_lookup = {
 	0x24: 'RESUPPLY_RATE_BONUS',
@@ -327,7 +328,7 @@ class tgmFile:
                                     hero['player_id'],
                                     hero['editor_id'],)
             
-            data = addChunkPadding(data)
+            data = addChunkPadding(data, force=True)
             data = struct.pack('>4sI', b'HROS', len(data)) + data
             return data
     
@@ -394,6 +395,24 @@ class tgmFile:
                 self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
                 #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
                 self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
+    
+    def write(self, dest_path):
+        with open(self.filename, 'rb') as in_fp, open(dest_path, 'wb+') as out_fp:
+            #write placeholder FORM
+            out_fp.write(b'FORM\xFF\xFF\xFF\xFFTGSV')
+            for iff_chunk in self.iff.data.children:
+                if iff_chunk.type in self.chunks and hasattr(self.chunks[iff_chunk.type], 'pack'):
+                    out_fp.write(self.chunks[iff_chunk.type].pack())
+                else:
+                    out_fp.write(struct.pack('>4sI', iff_chunk.type.encode('ascii'), iff_chunk.length))
+                    in_fp.seek(iff_chunk.data_offset)
+                    out_fp.write(in_fp.read(iff_chunk.length))
+                    if last_bytes := (out_fp.tell() % 4):
+                        out_fp.write(b'\x00'*(4-last_bytes))
+            
+            file_size = out_fp.seek(0,2)
+            out_fp.seek(4)
+            out_fp.write(struct.pack('>I', file_size - 12))
 
 
 class MapObj:
@@ -476,7 +495,7 @@ class Building(MapObj):
              self.construction_cost,) = struct.unpack('=I9f', fh.read(40))
             print(f'    Modifiers: size: {self.size}')
             if self.size > 36:
-                (self.kaldunite_resistance,
+                (self.khaldunite_resistance,
                  self.padding,) = struct.unpack(f'=f{self.size-40}s', fh.read(4+self.size-40))
         
         def pack(self):
@@ -784,13 +803,14 @@ class Company(MapObj):
         self.fh.seek(4, 1) # skips 4byte padding
         
         (start,)  = struct.unpack('=8s', self.fh.read(8))
-        self.modifiers_gained = {'start': start}
+        self.modifiers_gained = deepcopy(comp_mods_default)
+        self.modifiers_gained['start'] = start
         for m in comp_mods_lookup.values():
-            (self.modifiers_gained[m],) = struct.unpack('=f', self.fh.read(4))
-        self.fh.seek(4, 1) # skips 4byte padding
+            (self.modifiers_gained[m][0],) = struct.unpack('=f', self.fh.read(4))
         
-        (self.uk6,
-         self.num_units,) = struct.unpack('=13sI', self.fh.read(17))
+        (self.unknown_mod,
+         self.uk6,
+         self.num_units,) = struct.unpack('=f13sI', self.fh.read(21))
         
         self.units = [Unit(self.fh, self.TYPE_ref) for _ in range(self.num_units)]
         
@@ -874,9 +894,9 @@ class Company(MapObj):
         for name, value in self.modifiers_gained.items():
             if name != 'start':
                 data += struct.pack('<f', value[0])
-        data += struct.pack('<4x')
         
-        data += struct.pack('<13sI',
+        data += struct.pack('<f13sI',
+                            self.unknown_mod,
                             self.uk6,
                             self.num_units,)
         
@@ -922,9 +942,10 @@ class Unit(MapObj):
          start,
          modifiers_size,) = struct.unpack('=24sHH6f42sII', self.fh.read(102))
         
-        self.modifiers_gained = {'start': start}
+        self.modifiers_gained = deepcopy(unit_mods_default)
+        self.modifiers_gained['start'] = start
         for m in unit_mods_default.keys():
-            (self.modifiers_gained[m],) = struct.unpack('=f', self.fh.read(4))
+            (self.modifiers_gained[m][0],) = struct.unpack('=f', self.fh.read(4))
         
         (self.f5,
          self.uk3,
@@ -1059,13 +1080,17 @@ def getMapObjClass(in_fh):
         case _:
             return MapObj
          
-def addChunkPadding(data):
-    print(f'Padding Length: {((4 - len(data) % 4) % 4)}')
-    return data + b'\x00' * ((4 - len(data) % 4) % 4)
+def addChunkPadding(data, force=False):
+    
+    final_modulo = 5 if force == True else 4
+    padding = b'\x00' * ((4 - len(data) % 4) % final_modulo)
+    print(f'Padding Length: {len(padding)}')
+    return data + padding
                 
                 
 #testTGM = tgmFile('ECM1-CLEANED.TGM')
 #testTGM.load()
+#testTGM.write('write-test.tgm')
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 
