@@ -364,7 +364,7 @@ class tgmFile:
                 (self.unknown0,) = struct.unpack('=4s', in_fh.read(4))
                 self.objs = []
                 
-                while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 19):
+                while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 4):
                 #for _ in range(6):
                     self.objs.append(getMapObjClass(in_fh)(in_fh, TYPE))
                     #pprint(vars(self.objs[-1]))   
@@ -397,7 +397,9 @@ class tgmFile:
 
 
 class MapObj:
-    def __init__(self):
+    def __init__(self, in_fh, TYPE):
+        self.fh = in_fh
+        self.TYPE_ref = TYPE
         print(f'reading header @ {self.fh.tell()}')
         self.header = self.ObjectHeader(self.fh)
                 
@@ -420,7 +422,7 @@ class MapObj:
                                self.hotspot_sw,)
     
     def pack(self):
-        return b''
+        return self.header.pack()
 
 
 class Building(MapObj):
@@ -441,6 +443,24 @@ class Building(MapObj):
              self.comp_name_len,) = struct.unpack('=5sf8sff9sf5sHHBB', fh.read(49))
             (self.company_name,) = struct.unpack(f'={self.comp_name_len}s', fh.read(self.comp_name_len))
             (self.max,) = struct.unpack('=f', fh.read(4))
+            
+        def pack(self):
+            data = struct.pack('<5sf8sff9sf5sHHBB',
+                               self.padding,
+                               self.supply_zone,
+                               self.unknown1,
+                               self.current,
+                               self.regen_rate,
+                               self.unknown2,
+                               self.guard_zone,
+                               self.unknown3,
+                               self.front_index,
+                               self.support_index,
+                               self.company_size,
+                               len(self.company_name),)
+            data += struct.pack(f'<{len(self.company_name)}s', self.company_name,)
+            data += struct.pack('<f', self.max,)
+            return data
     
     class Modifiers:
         def __init__(self, fh):
@@ -454,15 +474,30 @@ class Building(MapObj):
              self.magic_resistance,
              self.non_magic_resistance,
              self.construction_cost,) = struct.unpack('=I9f', fh.read(40))
+            print(f'    Modifiers: size: {self.size}')
             if self.size > 36:
                 (self.kaldunite_resistance,
                  self.padding,) = struct.unpack(f'=f{self.size-40}s', fh.read(4+self.size-40))
-    
+        
+        def pack(self):
+            data = struct.pack('<9f',
+                               self.group_1_commission_cost,
+                               self.group_1_commission_cost,
+                               self.group_1_commission_cost,
+                               self.group_1_commission_cost,
+                               self.militia_av,
+                               self.militia_dv,
+                               self.magic_resistance,
+                               self.non_magic_resistance,
+                               self.construction_cost,)
+            if hasattr(self, 'khaldunite_resistance'):
+                data += struct.pack(f'<f{len(self.padding)}s',
+                                    self.khaldunite_resistance,
+                                    self.padding,)
+            return struct.pack('<I', len(data)) + data
     
     def __init__(self, in_fh, TYPE):
-        self.fh = in_fh
-        self.TYPE_ref = TYPE
-        MapObj.__init__(self)
+        MapObj.__init__(self, in_fh, TYPE)
         (self.name,
          self.flag1,
          self.flag2,) = struct.unpack('=20sBB', self.fh.read(22))
@@ -502,27 +537,24 @@ class Building(MapObj):
                  self.inportant0) = struct.unpack('=10sB4sI', self.fh.read(19))
                 
                 # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
-                start_pos = self.fh.tell()
-                while self.fh.read(2) != b'\xA0\x40':
-                    self.fh.seek(-1, 1)
-                pad_len = self.fh.tell() - start_pos
-                self.fh.seek(start_pos)
-                (padding,) = struct.unpack(f'={pad_len+14}s', self.fh.read(pad_len+14))
+                pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 16
+                (self.padding0,) = struct.unpack(f'={pad_len}s', self.fh.read(pad_len))
                 print(f'  reading building mods @ {self.fh.tell()}')
                 self.building_modifiers = self.Modifiers(self.fh)
                 
                 (self.important1,
                  self.num_modifiers) = struct.unpack('=2I', self.fh.read(8))
+                self.modifiers_gained = []
                 if self.num_modifiers == 0:
                     (self.block_2,) = struct.unpack('=5s', self.fh.read(5))
                 else:
-                    self.gained_modifiers = []
                     print(f'nm:{self.num_modifiers}')
                     for _ in range (self.num_modifiers):
                         new_mod = {}
                         (new_mod['id'],
                          new_mod['value'],
                          new_mod['null'],) = struct.unpack('=HfB', self.fh.read(7))
+                        self.modifiers_gained.append(new_mod)
                         
                     (self.unknown,
                      self.upgrade_cost) = struct.unpack('=Bf', self.fh.read(5))
@@ -550,18 +582,19 @@ class Building(MapObj):
                     self.fh.seek(-20 + len(upgrade_name), 1)
                     if len(upgrade_name) > 1:
                         new_comp['upgrade_name'] = upgrade_name
+                    #TODO adjust size of 'data' to account for name length
                     (new_comp['data'],) = struct.unpack(f"={new_comp['size']}s", self.fh.read(new_comp['size']))
                     self.components.append(new_comp)
             case 2:
-                self.militia_data = self.MilitiaData(self.fh)
+                self.militia = self.MilitiaData(self.fh)
                 # Skips null bytes
-                pad_size = 0
-                while self.fh.read(1) == b'\00':
-                    pad_size += 1
+                self.padding0 = b''
+                while self.fh.read(1) == b'\x00':
+                    self.padding0 += b'\x00'
                 self.fh.seek(-1,1)
                 
             case 3:
-                self.militia_data = self.MilitiaData(self.fh)
+                self.militia = self.MilitiaData(self.fh)
                 (self.unknown5,) = struct.unpack('=17s', self.fh.read(17))
                 
             case 4:
@@ -571,12 +604,96 @@ class Building(MapObj):
                  self.base_wood_production,
                  self.base_iron_production,
                  self.base_mana_production,) = struct.unpack('=26sfffff', self.fh.read(46))
+    
+    def pack(self):
+        #print(f'edtr_id:{self.header.editor_id} type:{self.TYPE_ref.by_index[self.header.index]} se:{self.header.hotspot_se} sw:{self.header.hotspot_sw}')
+        data = self.header.pack()
+        
+        data += struct.pack('<20sBB',
+                            self.name,
+                            self.flag1,
+                            self.flag2,)
+        if self.flag2 == 13:
+            data += struct.pack('<f', self.current_hp,)
+        elif self.flag2 == 7:
+            data += struct.pack('<B', self.unknown_flag_data,)
+        
+        data += struct.pack('<12sBfHHfffffcf4sf',
+                            self.unknown1,
+                            self.status,
+                            self.unknown2,
+                            self.pos_se,
+                            self.pos_sw,
+                            self.current_gold_production,
+                            self.current_stone_production,
+                            self.current_wood_production,
+                            self.current_iron_production,
+                            self.current_mana_production,
+                            self.unknown3,
+                            self.max_hp,
+                            self.unknown4,
+                            self.booty_value,)
+        
+        match self.TYPE_ref.by_index[self.header.index]['subtype']:
+            # Ruins
+            case 0:
+                data += struct.pack('<13s', self.ruin_data,)
+            
+            # Settlements
+            case 1|5|6|7|8:
+                data += self.militia.pack()
+                
+                data += struct.pack(f'<10sB4sI{len(self.padding0)}s',
+                                    self.unknown5,
+                                    self.component_bitflag,# TODO Calculate correct flag in case components have changed
+                                    self.unknown6,
+                                    self.inportant0,
+                                    self.padding0)
+                
+                data += self.building_modifiers.pack()
+                
+                data += struct.pack('<2I',
+                                    self.important1,
+                                    len(self.modifiers_gained),)
+                if len(self.modifiers_gained) == 0:
+                    data += struct.pack('<5s', self.block_2,)
+                else:
+                    for mod in self.modifiers_gained:
+                        data += struct.pack('<HfB',
+                                            mod['id'],
+                                            mod['value'],
+                                            mod['null'],)
+                    data += struct.pack('<Bf',
+                                        self.unknown,
+                                        self.upgrade_cost,)
+                
+                for comp in self.components:
+                    if 'component_cost' in comp:
+                        data += struct.pack('<f', comp['component_cost'])
+                    data += struct.pack('<I',comp['size'],)
+                    if 'upgrade_name' in comp:
+                        data += struct.pack('<20s', comp['upgrade_name'])
+                    data += struct.pack(f"<{len(comp['data'])}s", comp['data'],)
+            case 2:
+                data += self.militia.pack()
+                data += struct.pack(f'<{len(self.padding0)}s', self.padding0,)
+            case 3:
+                data += self.militia.pack()
+                data += struct.pack('<17s', self.unknown5,)
+            case 4:
+                data += struct.pack('<26sfffff',
+                                    self.unknown5,
+                                    self.base_gold_production,
+                                    self.base_stone_production,
+                                    self.base_wood_production,
+                                    self.base_iron_production,
+                                    self.base_mana_production,)
+        return data
+
 
 class Company(MapObj):  
     def __init__(self, in_fh, TYPE):
-        self.fh = in_fh
-        self.TYPE_ref = TYPE
-        MapObj.__init__(self)
+        MapObj.__init__(self, in_fh, TYPE)
         
         (self.captain_index,
          self.front_index,
@@ -620,7 +737,7 @@ class Company(MapObj):
             }
         
         # Find padding bytes & beginning of company mods, subtract back to start of unit positions
-        zoc_to_pos_size = findBytes(b'\x00\x00\x00\x00\x04\x00\x00\x00', self.fh) - self.fh.tell() - 48
+        zoc_to_pos_size = findBytes(b'\x00\x00\x00\x00\x04\x00\x00\x00', self.fh, search_start=100) - self.fh.tell() - 48
         
         print(f'ztps:{zoc_to_pos_size}')
         (self.zoc_to_pos,
@@ -654,6 +771,7 @@ class Company(MapObj):
         
         (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
         self.company_modifiers_provided = [('start', start)]
+        print(f'  start: {start}, num: {num_modifiers} @ {self.fh.tell()}')
         for _ in range(num_modifiers):
             (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
             self.company_modifiers_provided.append((comp_mods_lookup[key], value,))
@@ -776,19 +894,18 @@ class Company(MapObj):
         
 class Unit(MapObj):
     def __init__(self, in_fh, TYPE):
-        self.fh = in_fh
-        self.TYPE_ref = TYPE
-        (self.unit_index,) = struct.unpack('=B', self.fh.read(1))
+        (self.unit_index,) = struct.unpack('=B', in_fh.read(1))
               
-        MapObj.__init__(self)
+        MapObj.__init__(self, in_fh, TYPE)
         
         (self.flag1, self.flag2,) = struct.unpack('=BB', self.fh.read(2))
+        self.current_hp = None
         match self.flag2:
             case 0x09:
                 (self.current_hp,
-                 self.uk0) = struct.unpack('=fH', self.fh.read(6))
+                 self.uk0,) = struct.unpack('=fH', self.fh.read(6))
             case 0x0B:
-                (self.uk0) = struct.unpack('=H', self.fh.read(2))
+                (self.uk0,) = struct.unpack('=H', self.fh.read(2))
             case 0x0D:
                 (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
         
@@ -837,6 +954,7 @@ class Unit(MapObj):
         data += struct.pack('<B', self.unit_index,)
         data += self.header.pack()
         data += struct.pack('<BB', self.flag1, self.flag2,)
+        
         match self.flag2:
             case 0x09:
                  data += struct.pack('<fH', self.current_hp, self.uk0,)
@@ -884,10 +1002,38 @@ class Unit(MapObj):
                                     self.mana,
                                     self.uk5,)
         return data
+    
+
+class Misc(MapObj):
+    def __init__(self, in_fh, TYPE):
+        MapObj.__init__(self, in_fh, TYPE)
+        if self.header.index != 0xFFFF:
+            (self.flag1, self.flag2,) = struct.unpack('=BB', self.fh.read(2))
+            if self.flag2 == 0x0B:
+                (self.s0,) = struct.unpack('=H', self.fh.read(2))
+            match self.TYPE_ref.by_index[self.header.index]['subtype']:
+                    case 0:
+                        (self.data,) = struct.unpack('4s', self.fh.read(4))
+                    case 1:
+                        (self.data,) = struct.unpack('4s', self.fh.read(25))
+                    case 2:
+                        (self.data,) = struct.unpack('4s', self.fh.read(25))
+    
+    def pack(self):
+        data = self.header.pack()
+        if self.header.index != 0xFFFF:
+            data += struct.pack('<BB', self.flag1, self.flag2,)
+            if self.flag2 == 0x0B:
+                data += struct.pack('<H', self.s0,)
+            data += struct.pack(f'<{len(self.data)}s', self.data)
         
+        return data
+            
         
-def findBytes(query, fh, search_length=None):
+def findBytes(query, fh, search_start=None ,search_length=None):
     start_pos = fh.tell()
+    if search_start:
+        fh.seek(search_start, 1)
     cur_val = fh.read(len(query))
     while cur_val != query:
         if search_length and fh.tell() - start_pos > search_length:
@@ -905,7 +1051,7 @@ def getMapObjClass(in_fh):
     print(f'obj_class: {obj_class:#x} @ {in_fh.tell()}')
     match obj_class:
         case 0x10:
-            return Unit
+            return Misc
         case 0x24:
             return Building
         case 0x3C:
@@ -918,8 +1064,8 @@ def addChunkPadding(data):
     return data + b'\x00' * ((4 - len(data) % 4) % 4)
                 
                 
-testTGM = tgmFile('ECM1-CLEANED.TGM')
-testTGM.load()
+#testTGM = tgmFile('ECM1-CLEANED.TGM')
+#testTGM.load()
 #for obj in testTGM.TYPE.objs.values():
 #    print(obj)
 
