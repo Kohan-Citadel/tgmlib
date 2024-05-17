@@ -82,7 +82,7 @@ unit_mods_default = {
 	'DEFENSE_BONUS_VS_SHADOW': [0, 'add'],
 	'DEFENSE_BONUS_VS_ARCHER': [0, 'add'],
 	'WAS_DAMAGE_BONUS_TO_SHADOW': [1, 'multiply'],
-	'DAMAGE_BONUS_TO_ANY': [0, 'add'],
+	'DAMAGE_BONUS_TO_ANY': [1, 'multiply'],
 	'WAS_DAMAGE_BONUS_TO_MOUNTED': [1, 'multiply'],
 	'UK2': [0, 'add'],
 	'ATTACK_BONUS_TO_NONSHADOW': [0, 'add'],
@@ -225,25 +225,27 @@ class tgmFile:
                      feature['index'],
                      feature['editor_id'],
                      feature['pos_se'],
-                     feature['pos_sw'],
-                     feature['flag'],) = struct.unpack('=hHIffH', in_fh.read(18))
-                    if feature['flag'] == 0x0F09:
-                        (feature['data'],) = struct.unpack('4s', in_fh.read(4))
+                     feature['pos_sw'],) = struct.unpack('=hHIff', in_fh.read(16))
+                    if feature['index'] != 0xFFFF:
+                        (feature['flag'],) = struct.unpack('=H', in_fh.read(2))
+                        if feature['flag'] == 0x0F09:
+                            (feature['data'],) = struct.unpack('4s', in_fh.read(4))
                     self.features.append(feature)
         
         def pack(self):
             data = b''
             data += struct.pack('<I', self.load)
             for feature in self.features:
-                data += struct.pack('=hHIffH',
+                data += struct.pack('=hHIff',
                                     feature['header'],
                                     feature['index'],
                                     feature['editor_id'],
                                     feature['pos_se'],
-                                    feature['pos_sw'],
-                                    feature['flag'],)
-                if feature['flag'] == 0x0F09:
-                    data += struct.pack('4s', feature['data'],)
+                                    feature['pos_sw'],)
+                if feature['index'] != 0xFFFF:
+                    data += struct.pack('<H', feature['flag'],)
+                    if feature['flag'] == 0x0F09:
+                        data += struct.pack('4s', feature['data'],)
             
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'FTRS', len(data)) + data

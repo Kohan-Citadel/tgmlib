@@ -3,11 +3,10 @@ from configparser import ConfigParser
 from pathlib import Path
 import re
 from copy import deepcopy
-import struct
 
-old_map_path = '../../../Mod-Test-Only/Maps/ECM13-1.3.7.TGM'
+old_map_path = '../../../Mod-Test-Only/Maps/137-comp.tgm'
 new_map_path = 'KG-0.9.6.TGM'
-dest_path = '../../../Mod-Test-Only/Maps/ECM13-KG-0.9.6.TGM'
+dest_path = '../../../Mod-Test-Only/Maps/137-comp-out.tgm'
 name_mapping_path = ''
 old_map = tgmlib.tgmFile(old_map_path)
 ref_map = tgmlib.tgmFile(new_map_path)
@@ -168,6 +167,8 @@ for k in only_old:
     old_map.chunks['HROS'].heroes.pop(k)
 for k in only_ref:
     old_map.chunks['HROS'].heroes[k] = hero_template.copy()
+#Put heroes back in alphabetical order
+old_map.chunks['HROS'].heroes = dict(sorted(old_map.chunks['HROS'].heroes.items()))
 
 # Added to prevent crashes from empty type indicies
 index_mapping = {0xFFFF: 0xFFFF}
@@ -183,8 +184,7 @@ for k, v in old_map.chunks['TYPE'].by_name.items():
     index_mapping[old_index] = new_index
 
 for f in old_map.chunks['FTRS'].features:
-    if f['index'] != 0xFFFF:
-        f['index'] = index_mapping[f['index']] 
+    f['index'] = index_mapping[f['index']] 
 
 def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
     eb_name = 'ElementBonus'
@@ -205,12 +205,13 @@ def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
                 unit.modifiers_gained[K][0] *= float(v)
             
     if unit_index in (0,5,6):
-        for k, v in unit_ini[sb_name].items():
+        # reversed to match the order kohan writes modifiers
+        for k, v in reversed(dict(unit_ini[sb_name]).items()):
             K = k.upper()
             if K in tgmlib.comp_mods_default:
-                obj.company_modifiers_provided.append((K, float(v),))
+                obj.company_modifiers_provided.insert(1, (K, float(v),))
             elif K in tgmlib.unit_mods_lookup.values():
-                obj.unit_modifiers_provided.append((K, float(v),))
+                obj.unit_modifiers_provided.insert(1,(K, float(v),))
 
 
 hero_name_re = re.compile(r"([a-zA-Z012_ ']+?)(Enlightened|Restored|Ascended){0,1}$")
@@ -303,6 +304,11 @@ for obj in old_map.chunks['OBJS'].objs:
                             unit.modifiers_gained[k][0] += int(v)
                         elif op == 'multiply':
                             unit.modifiers_gained[k][0] *= float(v)
+                    if k == 'HIT_POINTS_BONUS':
+                        unit.current_hp *= float(v)
+                        unit.max_hp = unit.current_hp
+                        if unit.flag2 not in (0x09, 0x0D):
+                            unit.flag2 = 0x0D
             
             #print(obj.modifiers_gained)
             for (k, v,) in obj.company_modifiers_provided[1:]:
