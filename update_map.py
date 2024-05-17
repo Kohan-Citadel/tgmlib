@@ -117,6 +117,8 @@ for obj in old_map.chunks['OBJS'].objs:
             if hasattr(obj, 'militia'):
                 obj.militia.front_index = index_mapping[obj.militia.front_index]
                 obj.militia.support_index = index_mapping[obj.militia.support_index]
+            if hasattr(obj, 'upgrade_index'):
+                obj.upgrade_index = index_mapping[obj.upgrade_index]
 
         case 0x3C:
             obj.captain_index = index_mapping[obj.captain_index]

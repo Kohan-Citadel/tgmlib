@@ -485,7 +485,8 @@ class Building(MapObj):
     
     class Modifiers:
         def __init__(self, fh):
-            (self.size,
+            (self.start,
+             self.size,
              self.group_1_commission_cost,
              self.group_1_commission_cost,
              self.group_1_commission_cost,
@@ -494,7 +495,7 @@ class Building(MapObj):
              self.militia_dv,
              self.magic_resistance,
              self.non_magic_resistance,
-             self.construction_cost,) = struct.unpack('=I9f', fh.read(40))
+             self.construction_cost,) = struct.unpack('=2I9f', fh.read(44))
             print(f'    Modifiers: size: {self.size}')
             if self.size > 36:
                 (self.khaldunite_resistance,
@@ -515,7 +516,7 @@ class Building(MapObj):
                 data += struct.pack(f'<f{len(self.padding)}s',
                                     self.khaldunite_resistance,
                                     self.padding,)
-            return struct.pack('<I', len(data)) + data
+            return struct.pack('<2I', self.start, len(data)) + data
     
     def __init__(self, in_fh, TYPE):
         MapObj.__init__(self, in_fh, TYPE)
@@ -558,8 +559,10 @@ class Building(MapObj):
                  self.inportant0) = struct.unpack('=10sB4sI', self.fh.read(19))
                 
                 # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
-                pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 16
-                (self.padding0,) = struct.unpack(f'={pad_len}s', self.fh.read(pad_len))
+                pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 6
+                (self.padding0,
+                 self.upgrade_index,) = struct.unpack(f'={pad_len}sHxxxx', self.fh.read(pad_len+6))
+                
                 print(f'  reading building mods @ {self.fh.tell()}')
                 self.building_modifiers = self.Modifiers(self.fh)
                 
@@ -664,12 +667,13 @@ class Building(MapObj):
             case 1|5|6|7|8:
                 data += self.militia.pack()
                 
-                data += struct.pack(f'<10sB4sI{len(self.padding0)}s',
+                data += struct.pack(f'<10sB4sI{len(self.padding0)}sHxxxx',
                                     self.unknown5,
                                     self.component_bitflag,# TODO Calculate correct flag in case components have changed
                                     self.unknown6,
                                     self.inportant0,
-                                    self.padding0)
+                                    self.padding0,
+                                    self.upgrade_index,)
                 
                 data += self.building_modifiers.pack()
                 
