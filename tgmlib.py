@@ -219,7 +219,7 @@ class tgmFile:
                 start_pos = in_fh.tell()
                 (self.load,) = struct.unpack('=i', in_fh.read(4))
                 self.features = []
-                while (in_fh.tell() < start_pos + iff.data.children[6].length):
+                while (in_fh.tell() < start_pos + iff.data.children[6].length - 12):
                     feature = {}
                     (feature['header'],
                      feature['index'],
