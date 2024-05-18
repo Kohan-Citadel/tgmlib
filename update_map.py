@@ -185,10 +185,12 @@ for obj in old_map.chunks['OBJS'].objs:
                     unitUpdateModifiers(unit_ini, unit.unit_index)
                 
                 # divide by 14 to convert from display speed to internal speed
-                unit.current_speed = unit.base_speed = float(unit_ini['UnitData']['MovementRate'])/14
+                unit.current_speed0, unit.current_speed1, unit.base_speed = (float(unit_ini['UnitData']['MovementRate'])/14,)*3
                 if unit.base_speed < obj.speed:
+                    print(f'obj[{i}]: unit[{unit.unit_index}]: base speed {unit.base_speed} less than company speed {obj.speed}')
                     obj.speed = unit.base_speed
-    
+                    obj.slowest_unit = unit.unit_index
+                    print(f'  set slowest_unit to {obj.slowest_unit}')
             
             for unit in obj.units:
                 for (k, v,) in obj.unit_modifiers_provided[1:]:

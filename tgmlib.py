@@ -752,7 +752,9 @@ class Company(MapObj):
          self.current_morale,
          self.max_morale,
          self.uk4,
-         self.zone_of_control,) = struct.unpack('=6sHIfII4s11f13s2f16sf', self.fh.read(113))
+         self.zone_of_control,
+         self.uk4_5,
+         self.slowest_unit,) = struct.unpack('=6sHIfII4s11f13s2f16sf12sB', self.fh.read(126))
         
         self.upkeep = {
             'stone': stone,
@@ -838,7 +840,7 @@ class Company(MapObj):
                             self.b3,
                             self.b4,
                             self.name,)
-        data += struct.pack('<6sHIfII4s11f13s2f16sf',
+        data += struct.pack('<6sHIfII4s11f13s2f16sf12sB',
                             self.uk0,
                             self.captain_id,
                             self.occupy_flag0,
@@ -861,7 +863,9 @@ class Company(MapObj):
                             self.current_morale,
                             self.max_morale,
                             self.uk4,
-                            self.zone_of_control,)
+                            self.zone_of_control,
+                            self.uk4_5,
+                            self.slowest_unit,)
         data += struct.pack(f'={len(self.zoc_to_pos)}s12f4x',
                             self.zoc_to_pos,
                             self.unit_positions[0]['se'],
@@ -943,10 +947,12 @@ class Unit(MapObj):
          self.f2,
          self.f3,
          self.f4,
-         self.current_speed,
+         self.current_speed0,
          self.uk2,
+         self.current_speed1,
+         self.uk2_5,
          start,
-         modifiers_size,) = struct.unpack('=24sHH6f42sII', self.fh.read(102))
+         modifiers_size,) = struct.unpack('=24sHH6f22sf16sII', self.fh.read(102))
         
         self.modifiers_gained = deepcopy(unit_mods_default)
         self.modifiers_gained['start'] = start
@@ -989,7 +995,7 @@ class Unit(MapObj):
                 data += struct.pack('<H', self.uk0,)
             case 0x0D:
                 data += struct.pack('<f', self.current_hp,)
-        data += struct.pack('<24sHH6f42sII',
+        data += struct.pack('<24sHH6f22sf16sII',
                             self.uk1,
                             self.pos_se,
                             self.pos_sw,
@@ -998,8 +1004,10 @@ class Unit(MapObj):
                             self.f2,
                             self.f3,
                             self.f4,
-                            self.current_speed,
+                            self.current_speed0,
                             self.uk2,
+                            self.current_speed1,
+                            self.uk2_5,
                             self.modifiers_gained['start'],
                             (len(self.modifiers_gained) - 1) * 4,)
         for k, v in self.modifiers_gained.items():
