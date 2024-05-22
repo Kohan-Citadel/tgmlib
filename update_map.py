@@ -4,10 +4,10 @@ from pathlib import Path
 import re
 from copy import deepcopy
 import json
-
-old_map_path = 'ECM1-CLEANED.TGM'
+num = 13
+old_map_path = f'EXPANSION CAMPAIGN OLD/ECM{num}.TGM'
 new_map_path = 'KG-0.9.6.TGM'
-dest_path = '../../../Mod-Test-Only/Maps/ECM1-UPDATE-FIX.TGM'
+dest_path = f'EXPANSION CAMPAIGN/ECM{num}.TGM'
 name_mapping_path = 'name-mapping-KG0.9.6.json'
 old_map = tgmlib.tgmFile(old_map_path)
 ref_map = tgmlib.tgmFile(new_map_path)
@@ -41,16 +41,20 @@ def sortHeroes(hero_name):
 old_heroes.sort(key=sortHeroes)
 for k in old_heroes:
     if k in name_mapping:
-        print(f'merging {k} into {name_mapping[k]}')
+        print(f'merging {k} and {name_mapping[k]}')
         # Use HROS entry with higher state value
         src = old_map.chunks['HROS'].heroes.pop(k)
         if name_mapping[k] not in old_map.chunks['HROS'].heroes:
             old_map.chunks['HROS'].heroes[name_mapping[k]] = hero_template.copy()
-        if src['status'] > old_map.chunks['HROS'].heroes[name_mapping[k]]['status']:
-            old_map.chunks['HROS'].heroes[name_mapping[k]] = src.copy()
-        elif src['player_id'] != -1:
-            print(f'Duplicate hero {k} with ID {src["editor_id"]} marked for removal')
-            heroes_to_remove.append(src['editor_id'])
+        if src['player_id'] != -1:
+            if src['status'] > old_map.chunks['HROS'].heroes[name_mapping[k]]['status']:
+                print(f'  overwriting {name_mapping[k]} with {k}')
+                old_map.chunks['HROS'].heroes[name_mapping[k]] = src.copy()
+            else:
+                print(f'Duplicate hero {k} with ID {src["editor_id"]} marked for removal')
+                heroes_to_remove.append(src['editor_id'])
+        else:
+            print(f'  discarding {k}')
 
 sym_dif = old_map.chunks['HROS'].heroes.keys() ^ ref_map.chunks['HROS'].heroes.keys()
 only_old = sym_dif & old_map.chunks['HROS'].heroes.keys()
@@ -119,6 +123,12 @@ for obj in old_map.chunks['OBJS'].objs:
                 obj.militia.support_index = index_mapping[obj.militia.support_index]
             if hasattr(obj, 'upgrade_index'):
                 obj.upgrade_index = index_mapping[obj.upgrade_index]
+            if hasattr(obj, 'current_hp'):
+                building_ini = ConfigParser(inline_comment_prefixes=(';',))
+                name = ref_map.chunks['TYPE'].by_index[obj.header.index]['name']
+                filepath = Path(f'./Data/ObjectData/Buildings/{name}.INI').resolve()
+                building_ini.read(filepath)
+                obj.current_hp, obj.max_hp = (float(building_ini['ObjectData']['MaxHitPoints']),)*2
 
         case 0x3C:
             obj.captain_index = index_mapping[obj.captain_index]
@@ -172,6 +182,7 @@ for obj in old_map.chunks['OBJS'].objs:
                     filepath = Path(f'./Data/ObjectData/Heroes/{name}.INI').resolve()
                     unit_ini.read(filepath)
                     unitUpdateModifiers(unit_ini, unit.unit_index, hero_level=level)
+                    old_map.chunks['HROS'].heroes[name]['editor_id'] = unit.header.editor_id
                     if level == 0:
                         unit.max_hp = unit.current_hp = float(unit_ini['ObjectData']['MaxHitPoints']) 
                     else:
@@ -187,10 +198,10 @@ for obj in old_map.chunks['OBJS'].objs:
                 # divide by 14 to convert from display speed to internal speed
                 unit.current_speed0, unit.current_speed1, unit.base_speed = (float(unit_ini['UnitData']['MovementRate'])/14,)*3
                 if unit.base_speed < obj.speed:
-                    print(f'obj[{i}]: unit[{unit.unit_index}]: base speed {unit.base_speed} less than company speed {obj.speed}')
+                    #print(f'obj[{i}]: unit[{unit.unit_index}]: base speed {unit.base_speed} less than company speed {obj.speed}')
                     obj.speed = unit.base_speed
                     obj.slowest_unit = unit.unit_index
-                    print(f'  set slowest_unit to {obj.slowest_unit}')
+                    #print(f'  set slowest_unit to {obj.slowest_unit}')
             
             for unit in obj.units:
                 for (k, v,) in obj.unit_modifiers_provided[1:]:

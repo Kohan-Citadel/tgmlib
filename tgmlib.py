@@ -312,7 +312,6 @@ class tgmFile:
                      hero['s1'],
                      hero['player_id'],
                      hero['editor_id'],) = struct.unpack(f'={name_len}siifihii', in_fh.read(26+name_len))
-                    print(name)
                     self.heroes[name.decode('ascii')] = hero
             
         def pack(self):
@@ -1095,7 +1094,6 @@ def getMapObjClass(in_fh):
             return MapObj
          
 def addChunkPadding(data, force=False):
-    
     final_modulo = 5 if force == True else 4
     padding = b'\x00' * ((4 - len(data) % 4) % final_modulo)
     print(f'Padding Length: {len(padding)}')
