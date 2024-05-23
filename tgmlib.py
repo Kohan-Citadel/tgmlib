@@ -197,10 +197,13 @@ class tgmFile:
     class MgrdChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file, EDTR):
             with open(filename, "rb") as in_fh:
-                # Skip required, fixed int at begining of chunk
-                in_fh.seek(iff.data.children[4].data_offset + 4)
+                in_fh.seek(iff.data.children[4].data_offset)
+                (self.required,) = struct.unpack('=I', in_fh.read(4))
+                self.EDTR_ref = EDTR
                 print(f'Reading first tile @ {in_fh.tell()}')
-                self.tiles = [self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(EDTR.size_se*EDTR.size_sw)]
+                self.tiles = []
+                for _ in range(self.EDTR_ref.size_se):
+                    self.tiles.append([self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(self.EDTR_ref.size_sw)])
                 
         class GridTile:
             def __init__(self, terrain, layout):
@@ -210,6 +213,26 @@ class tgmFile:
                 self.terrain2 = terrain & 15
                 self.display = layout >> 4
                 self.layout = layout & 15
+            
+            def copy(self):
+                return type(self)(self._terrain, self._layout)
+            
+            def pack(self):
+                terrain = (self.terrain1 << 4) | self.terrain2
+                layout = (self.display << 4) | self.layout
+                return struct.pack('>BB', terrain, layout)
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.required)
+            
+            for row in self.tiles:
+                for tile in row:
+                    data += tile.pack()
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'MGRD', len(data)) + data
+            return data
                 
     
     class FtrsChunk:

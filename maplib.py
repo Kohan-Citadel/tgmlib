@@ -43,6 +43,12 @@ class Position:
         if hasattr(self, 'x'):
             out += f' pixel coordinate: ({self.x}, {self.y})'
         return out
+    
+    def __add__(self, other):
+        return Position(se=self.se + other.se, sw=self.sw + other.sw)
+    
+    def __sub__(self, other):
+        return Position(se=self.se - other.se, sw=self.sw - other.sw)
 
 
 class SpriteCache:
