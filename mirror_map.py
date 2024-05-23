@@ -3,198 +3,70 @@ from maplib import Position
 P = Position
 
 tile_symmetries = {
-    0x0: {'n/s': {
-            'rotational': 0x0,
-            'reflectional': 0x0,},
-        'e/w': {
-            'rotational': 0x0,
-            'reflectional': 0x0,},
-        'ne/sw': {
-            'rotational': 0x0,
-            'reflectional': 0x0,},
-        'nw/se': {
-            'rotational': 0x0,
-            'reflectional': 0x0,},},
-    0x1: {'n/s': {
-            'rotational': 0x5,
-            'reflectional': 0x1,},
-        'e/w': {
-            'rotational': 0x5,
-            'reflectional': 0x5,},
-        'ne/sw': {
-            'rotational': 0x5,
-            'reflectional': 0x3,},
-        'nw/se': {
-            'rotational': 0x5,
-            'reflectional': 0x7,},},
-    0x20: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x30: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x40: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x50: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x60: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x70: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x80: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0x90: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xA0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xB0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xC0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xD0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xE0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
-    0xF0: {'n/s': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'e/w': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'ne/sw': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},
-        'nw/se': {
-            'rotational': 0xF,
-            'reflectional': 0xF,},},
+    0x0: {'n/s': {'rotational': 0x0, 'reflectional': 0x0,},
+          'e/w': {'rotational': 0x0, 'reflectional': 0x0,},
+          'ne/sw': {'rotational': 0x0, 'reflectional': 0x0,},
+          'nw/se': {'rotational': 0x0, 'reflectional': 0x0,},},
+    0x1: {'n/s': {'rotational': 0x5, 'reflectional': 0x1,},
+          'e/w': {'rotational': 0x5, 'reflectional': 0x5,},
+          'ne/sw': {'rotational': 0x5, 'reflectional': 0x3,},
+          'nw/se': {'rotational': 0x5, 'reflectional': 0x7,},},
+    0x2: {'n/s': {'rotational': 0x6, 'reflectional': 0x8,},
+          'e/w': {'rotational': 0x6, 'reflectional': 0x4,},
+          'ne/sw': {'rotational': 0x6, 'reflectional': 0x2,},
+          'nw/se': {'rotational': 0x6, 'reflectional': 0x6,},},
+    0x3: {'n/s': {'rotational': 0x7, 'reflectional': 0x7,},
+          'e/w': {'rotational': 0x7, 'reflectional': 0x3,},
+          'ne/sw': {'rotational': 0x7, 'reflectional': 0x1,},
+          'nw/se': {'rotational': 0x7, 'reflectional': 0x5,},},
+    0x40: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0x50: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0x60: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0x70: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0x80: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0x90: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xA0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xB0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xC0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xD0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xE0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
+    0xF0: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
+          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
+          'ne/sw': {'rotational': 0xF, 'reflectional': 0xF,},
+          'nw/se': {'rotational': 0xF, 'reflectional': 0xF,},},
     
     }
 
@@ -217,10 +89,13 @@ def flipCoords(center, axis, point, symmetry_type):
     if symmetry_type == 'rotational':
         return center + (center - point)
     if symmetry_type == 'reflectional':
+        print(f'   point: {point}')
         d = axis[1] - axis[0]
+        print(f'   d: {d}')
         det = d.se*d.se + d.sw*d.sw
         a = (d.sw*(point.sw-axis[0].sw)+d.sw*(point.se-axis[0].se))/det
-        closest = P(axis[0].se+a*d.se, axis[0].sw+a*d.sw)
+        closest = P(axis[0].se+a*d.se+1, axis[0].sw+a*d.sw-1)
+        print(f'   closest: {closest}')
         return closest + (closest - point)
 
 
@@ -261,12 +136,12 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
                 if new_tile.layout in tile_symmetries:
                     print(f'flipping tile')
                     new_tile.layout = tile_symmetries[new_tile.layout][symmetry_axis][symmetry_type]
-                else:
-                    new_tile.terrain1 = 0xB
-                    new_tile.terrain2 = 0xB
+                #else:
+                    #new_tile.terrain1 = 0xB
+                    #new_tile.terrain2 = 0xB
 
 tgm = tgmlib.tgmFile('ECM1-CLEARED.TGM')
 tgm.load()
-mirror(tgm, symmetry_axis='n/s', symmetry_type='rotational')
+mirror(tgm, symmetry_axis='e/w', symmetry_type='reflectional', side='negative')
 tgm.write('../../../Mod-Test-Only/Maps/_MIRROR.TGM')
     
