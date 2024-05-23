@@ -91,11 +91,9 @@ def flipCoords(center, axis, point, symmetry_type):
     if symmetry_type == 'reflectional':
         print(f'   point: {point}')
         d = axis[1] - axis[0]
-        print(f'   d: {d}')
         det = d.se*d.se + d.sw*d.sw
-        a = (d.sw*(point.sw-axis[0].sw)+d.sw*(point.se-axis[0].se))/det
-        closest = P(axis[0].se+a*d.se+1, axis[0].sw+a*d.sw-1)
-        print(f'   closest: {closest}')
+        a = (d.sw*(point.sw-axis[0].sw)+d.se*(point.se-axis[0].se))/det
+        closest = P(axis[0].se+a*d.se, axis[0].sw+a*d.sw)
         return closest + (closest - point)
 
 
@@ -142,6 +140,6 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
 
 tgm = tgmlib.tgmFile('ECM1-CLEARED.TGM')
 tgm.load()
-mirror(tgm, symmetry_axis='e/w', symmetry_type='reflectional', side='negative')
+mirror(tgm, symmetry_axis='nw/se', symmetry_type='reflectional', side='positive')
 tgm.write('../../../Mod-Test-Only/Maps/_MIRROR.TGM')
     
