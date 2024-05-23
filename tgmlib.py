@@ -236,43 +236,32 @@ class tgmFile:
                 
     
     class FtrsChunk:
-        def __init__(self, filename: str, iff: ifflib.iff_file):
+        def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[6].data_offset)
                 start_pos = in_fh.tell()
                 (self.load,) = struct.unpack('=i', in_fh.read(4))
                 self.features = []
                 while (in_fh.tell() < start_pos + iff.data.children[6].length - 12):
-                    feature = {}
-                    (feature['header'],
-                     feature['index'],
-                     feature['editor_id'],
-                     feature['pos_se'],
-                     feature['pos_sw'],) = struct.unpack('=hHIff', in_fh.read(16))
-                    if feature['index'] != 0xFFFF:
-                        (feature['flag'],) = struct.unpack('=H', in_fh.read(2))
-                        if feature['flag'] == 0x0F09:
-                            (feature['data'],) = struct.unpack('4s', in_fh.read(4))
-                    self.features.append(feature)
+                    self.features.append(Feature(in_fh, TYPE))
         
         def pack(self):
             data = b''
             data += struct.pack('<I', self.load)
             for feature in self.features:
-                data += struct.pack('=hHIff',
-                                    feature['header'],
-                                    feature['index'],
-                                    feature['editor_id'],
-                                    feature['pos_se'],
-                                    feature['pos_sw'],)
-                if feature['index'] != 0xFFFF:
-                    data += struct.pack('<H', feature['flag'],)
-                    if feature['flag'] == 0x0F09:
-                        data += struct.pack('4s', feature['data'],)
+                data += feature.pack()
             
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'FTRS', len(data)) + data
             return data                
+    
+    
+    class GameChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[10].data_offset)
+                start_pos = in_fh.tell()
+                (self.first_id, self.next_id,) = struct.unpack('=II', in_fh.read(8))
     
     
     class TypeChunk:
@@ -414,8 +403,9 @@ class tgmFile:
                 self.chunks = {}
                 self.chunks['EDTR'] = self.EdtrChunk(self.filename, self.iff)
                 self.chunks['MGRD'] = self.MgrdChunk(self.filename, self.iff, self.chunks['EDTR'])
-                self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff)
+                self.chunks['GAME'] = self.GameChunk(self.filename, self.iff)
                 self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
+                self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff, self.chunks['TYPE'])
                 self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
                 #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
                 self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
@@ -1085,7 +1075,22 @@ class Misc(MapObj):
             data += struct.pack(f'<{len(self.data)}s', self.data)
         
         return data
-            
+
+class Feature(MapObj):
+    def __init__(self, in_fh, TYPE):
+        MapObj.__init__(self, in_fh, TYPE)
+        if self.header.index != 0xFFFF:
+            (self.flag1, self.flag2,) = struct.unpack('=BB', self.fh.read(2))
+            if self.flag1 == 0x09 and self.flag2 == 0x0F:
+                (self.data,) = struct.unpack('4s', self.fh.read(4))
+    
+    def pack(self):
+        data = self.header.pack()
+        if self.header.index != 0xFFFF:
+            data += struct.pack('<BB', self.flag1, self.flag2,)
+            if self.flag1 == 0x09 and self.flag2 == 0x0F:
+                data += struct.pack('<4s', self.data,)
+        return data
         
 def findBytes(query, fh, search_start=None ,search_length=None):
     start_pos = fh.tell()

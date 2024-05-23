@@ -1,5 +1,6 @@
 import tgmlib
 from maplib import Position
+from copy import deepcopy
 P = Position
 
 tile_symmetries = {
@@ -137,7 +138,21 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
                 else:
                     new_tile.terrain1 = 0xB
                     new_tile.terrain2 = 0xB
-
+    
+    ftrs_iter = tgm.chunks['FTRS'].features.copy()
+    for f in ftrs_iter:
+        if cross(axis, P(f.header.hotspot_se, f.header.hotspot_sw), side):
+            f.fh = None
+            new_f = deepcopy(f)
+            new_pos = flipCoords(center, axis, P(f.header.hotspot_se, f.header.hotspot_sw), symmetry_type)
+            new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
+            new_f.header.editor_id = tgm.chunks['GAME'].next_id
+            tgm.chunks['GAME'].next_id += 1
+            tgm.chunks['FTRS'].features.append(new_f)
+        else:
+            tgm.chunks['FTRS'].features.pop(tgm.chunks['FTRS'].features.index(f))
+            
+        
 tgm = tgmlib.tgmFile('ECM1-CLEARED.TGM')
 tgm.load()
 mirror(tgm, symmetry_axis='ne/sw', symmetry_type='reflectional', side='negative')
