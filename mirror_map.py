@@ -148,13 +148,31 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
             new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
             new_f.header.editor_id = tgm.chunks['GAME'].next_id
             tgm.chunks['GAME'].next_id += 1
+            tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
             tgm.chunks['FTRS'].features.append(new_f)
         else:
+            tgm.chunks['GAME'].ids[f.header.editor_id] = False
             tgm.chunks['FTRS'].features.pop(tgm.chunks['FTRS'].features.index(f))
+    
+# =============================================================================
+#     objs_iter = tgm.chunks['OBJS'].objs.copy()
+#     for o in objs_iter:
+#         if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
+#             o.fh = None
+#             new_o = deepcopy(o)
+#             new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
+#             new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+#             new_o.header.editor_id = tgm.chunks['GAME'].next_id
+#             tgm.chunks['GAME'].next_id += 1
+#             tgm.chunks['OBJS'].objs.append(new_o)
+#         else:
+#             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+# =============================================================================
+    
             
         
-tgm = tgmlib.tgmFile('ECM1-CLEARED.TGM')
+tgm = tgmlib.tgmFile('../../../Mod-Test-Only/Maps/mirror_test.tgm')
 tgm.load()
-mirror(tgm, symmetry_axis='ne/sw', symmetry_type='reflectional', side='negative')
+mirror(tgm, symmetry_axis='n/s', symmetry_type='reflectional', side='positive')
 tgm.write('../../../Mod-Test-Only/Maps/_MIRROR.TGM')
     

@@ -244,13 +244,16 @@ class tgmFile:
                 self.features = []
                 while (in_fh.tell() < start_pos + iff.data.children[6].length - 12):
                     self.features.append(Feature(in_fh, TYPE))
+                    if self.features[-1].header.index == 0xFFFF:
+                        self.features.pop()
         
         def pack(self):
             data = b''
             data += struct.pack('<I', self.load)
             for feature in self.features:
                 data += feature.pack()
-            
+            # Adds empty feature to signify chunk end
+            data += b'\x10\x08\xFF\xFF' + b'\x00'*12
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'FTRS', len(data)) + data
             return data                
@@ -262,6 +265,32 @@ class tgmFile:
                 in_fh.seek(iff.data.children[10].data_offset)
                 start_pos = in_fh.tell()
                 (self.first_id, self.next_id,) = struct.unpack('=II', in_fh.read(8))
+                self.ids = []
+                for i in range(0x8000):
+                    if (val := in_fh.read(2)) == b'\x00\x00':
+                        self.ids.append(True)
+                    elif val == b'\xFF\xFF':
+                        self.ids.append(False)
+                    else:
+                        print(f'Invalid ID state {val} at id {i} in chunk GAME')
+                        raise SystemExit(1)
+                (self.ct_ids,) = struct.unpack('=I', in_fh.read(4))
+                self.obj_flags = []
+                for _ in range(start_pos + iff.data.children[10].length - in_fh.tell()):
+                    self.obj_flags.append(struct.unpack('=B', in_fh.read(1))[0])
+            
+        def pack(self):
+            data = struct.pack('<II', self.first_id, self.next_id,)
+            
+            for id in self.ids:
+                if id is True:
+                    data += struct.pack('<H', 0)
+                else:
+                    data += struct.pack('<H', 0xFFFF)
+            data += struct.pack('<I', self.ct_ids,)
+            data += struct.pack(f'<{len(self.obj_flags)}B', *self.obj_flags)
+            data = struct.pack('>4sI', b'GAME', len(data)) + data
+            return data 
     
     
     class TypeChunk:
@@ -381,6 +410,8 @@ class tgmFile:
                 while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 4):
                 #for _ in range(6):
                     self.objs.append(getMapObjClass(in_fh)(in_fh, TYPE))
+                    if self.objs[-1].header.index == 0xFFFF:
+                        self.objs.pop()
                     #pprint(vars(self.objs[-1]))   
                     #print('')
         
@@ -389,6 +420,8 @@ class tgmFile:
             data += struct.pack('<4s', self.unknown0)
             for obj in self.objs:
                 data += obj.pack()
+            # Adds empty obj to signify chunk end
+            data += b'\x10\x08\xFF\xFF' + b'\x00'*12
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'OBJS', len(data)) + data
             return data
@@ -564,11 +597,15 @@ class Building(MapObj):
             # Settlements
             case 1|5|6|7|8:
                 self.militia = self.MilitiaData(self.fh)
-                
+                if self.fh.read(1) == b'\x00':
+                    uk5_size = 10
+                else:
+                    uk5_size = 9
+                self.fh.seek(-1, 1)
                 (self.unknown5,
                  self.component_bitflag,
                  self.unknown6,
-                 self.inportant0) = struct.unpack('=10sB4sI', self.fh.read(19))
+                 self.inportant0) = struct.unpack(f'={uk5_size}sB4sI', self.fh.read(uk5_size+9))
                 
                 # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
                 pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 6
@@ -602,6 +639,7 @@ class Building(MapObj):
                 for _ in range(0,8):
                     self.ct_components += x&1
                     x >>= 1
+                print(f' comp_flag {self.component_bitflag} yielded {self.ct_components} componenets')
                 # +1 for adtl blank comp
                 print(f'  reading comps @ {self.fh.tell()}')
                 for i in range(self.ct_components + 1):

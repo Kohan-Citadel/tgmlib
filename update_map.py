@@ -68,7 +68,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
         index_mapping[old_index] = new_index
     
     for f in old_map.chunks['FTRS'].features:
-        f['index'] = index_mapping[f['index']] 
+        f.header.index = index_mapping[f.header.index] 
         
     def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
         eb_name = 'ElementBonus'
@@ -115,6 +115,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
                     name = ref_map.chunks['TYPE'].by_index[obj.header.index]['name']
                     filepath = Path(f'./Data/ObjectData/Buildings/{name}.INI').resolve()
                     building_ini.read(filepath)
+                    print(f'reading {filepath}')
                     obj.current_hp, obj.max_hp = (float(building_ini['ObjectData']['MaxHitPoints']),)*2
     
             case 0x3C:
