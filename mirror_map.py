@@ -4,70 +4,70 @@ from copy import deepcopy
 P = Position
 
 tile_symmetries = {
-    0x0: {'n/s': {'rotational': 0x0, 'reflectional': 0x0,},
-          'e/w': {'rotational': 0x0, 'reflectional': 0x0,},
-          'ne/sw': {'rotational': 0x0, 'reflectional': 0x0,},
-          'nw/se': {'rotational': 0x0, 'reflectional': 0x0,},},
-    0x1: {'n/s': {'rotational': 0x5, 'reflectional': 0x1,},
-          'e/w': {'rotational': 0x5, 'reflectional': 0x5,},
-          'ne/sw': {'rotational': 0x5, 'reflectional': 0x3,},
-          'nw/se': {'rotational': 0x5, 'reflectional': 0x7,},},
-    0x2: {'n/s': {'rotational': 0x6, 'reflectional': 0x8,},
-          'e/w': {'rotational': 0x6, 'reflectional': 0x4,},
-          'ne/sw': {'rotational': 0x6, 'reflectional': 0x2,},
-          'nw/se': {'rotational': 0x6, 'reflectional': 0x6,},},
-    0x3: {'n/s': {'rotational': 0x7, 'reflectional': 0x7,},
-          'e/w': {'rotational': 0x7, 'reflectional': 0x3,},
-          'ne/sw': {'rotational': 0x7, 'reflectional': 0x1,},
-          'nw/se': {'rotational': 0x7, 'reflectional': 0x5,},},
-    0x4: {'n/s': {'rotational': 0x8, 'reflectional': 0x6,},
-          'e/w': {'rotational': 0x8, 'reflectional': 0x2,},
-          'ne/sw': {'rotational': 0x8, 'reflectional': 0x8,},
-          'nw/se': {'rotational': 0x8, 'reflectional': 0x4,},},
-    0x5: {'n/s': {'rotational': 0x1, 'reflectional': 0x5,},
-          'e/w': {'rotational': 0x1, 'reflectional': 0x1,},
-          'ne/sw': {'rotational': 0x1, 'reflectional': 0x7,},
-          'nw/se': {'rotational': 0x1, 'reflectional': 0x3,},},
-    0x6: {'n/s': {'rotational': 0x2, 'reflectional': 0x4,},
-          'e/w': {'rotational': 0x2, 'reflectional': 0x8,},
-          'ne/sw': {'rotational': 0x2, 'reflectional': 0x6,},
-          'nw/se': {'rotational': 0x2, 'reflectional': 0x2,},},
-    0x7: {'n/s': {'rotational': 0x3, 'reflectional': 0x3,},
-          'e/w': {'rotational': 0x3, 'reflectional': 0x7,},
-          'ne/sw': {'rotational': 0x3, 'reflectional': 0x5,},
-          'nw/se': {'rotational': 0x3, 'reflectional': 0x1,},},
-    0x8: {'n/s': {'rotational': 0x4, 'reflectional': 0x2,},
-          'e/w': {'rotational': 0x4, 'reflectional': 0x6,},
-          'ne/sw': {'rotational': 0x4, 'reflectional': 0x4,},
-          'nw/se': {'rotational': 0x4, 'reflectional': 0x8,},},
-    0x9: {'n/s': {'rotational': 0x9, 'reflectional': 0x9,},
-          'e/w': {'rotational': 0x9, 'reflectional': 0x9,},
-          'ne/sw': {'rotational': 0x9, 'reflectional': 0xA,},
-          'nw/se': {'rotational': 0x9, 'reflectional': 0xA,},},
-    0xA: {'n/s': {'rotational': 0xA, 'reflectional': 0xA,},
-          'e/w': {'rotational': 0xA, 'reflectional': 0xA,},
-          'ne/sw': {'rotational': 0xA, 'reflectional': 0x9,},
-          'nw/se': {'rotational': 0xA, 'reflectional': 0x9,},},
-    0xB: {'n/s': {'rotational': 0xC, 'reflectional': 0xB,},
-          'e/w': {'rotational': 0xC, 'reflectional': 0xC,},
-          'ne/sw': {'rotational': 0xC, 'reflectional': 0xE,},
-          'nw/se': {'rotational': 0xC, 'reflectional': 0xD,},},
-    0xC: {'n/s': {'rotational': 0xB, 'reflectional': 0xC,},
-          'e/w': {'rotational': 0xB, 'reflectional': 0xB,},
-          'ne/sw': {'rotational': 0xB, 'reflectional': 0xD,},
-          'nw/se': {'rotational': 0xB, 'reflectional': 0xE,},},
-    0xD: {'n/s': {'rotational': 0xE, 'reflectional': 0xE,},
-          'e/w': {'rotational': 0xE, 'reflectional': 0xD,},
-          'ne/sw': {'rotational': 0xE, 'reflectional': 0xC,},
-          'nw/se': {'rotational': 0xE, 'reflectional': 0xB,},},
-    0xE: {'n/s': {'rotational': 0xD, 'reflectional': 0xD,},
-          'e/w': {'rotational': 0xD, 'reflectional': 0xE,},
-          'ne/sw': {'rotational': 0xD, 'reflectional': 0xB,},
-          'nw/se': {'rotational': 0xD, 'reflectional': 0xC,},},
-    0xF: {'n/s': {'rotational': 0xF, 'reflectional': 0xF,},
-          'e/w': {'rotational': 0xF, 'reflectional': 0xF,},
-          'ne/sw': {'rotational': 0xF, 'reflectional': 0xA,},
-          'nw/se': {'rotational': 0xF, 'reflectional': 0xA,},},
+    0x0: {'n/s': {'rotation': 0x0, 'reflection': 0x0,},
+          'e/w': {'rotation': 0x0, 'reflection': 0x0,},
+          'ne/sw': {'rotation': 0x0, 'reflection': 0x0,},
+          'nw/se': {'rotation': 0x0, 'reflection': 0x0,},},
+    0x1: {'n/s': {'rotation': 0x5, 'reflection': 0x1,},
+          'e/w': {'rotation': 0x5, 'reflection': 0x5,},
+          'ne/sw': {'rotation': 0x5, 'reflection': 0x3,},
+          'nw/se': {'rotation': 0x5, 'reflection': 0x7,},},
+    0x2: {'n/s': {'rotation': 0x6, 'reflection': 0x8,},
+          'e/w': {'rotation': 0x6, 'reflection': 0x4,},
+          'ne/sw': {'rotation': 0x6, 'reflection': 0x2,},
+          'nw/se': {'rotation': 0x6, 'reflection': 0x6,},},
+    0x3: {'n/s': {'rotation': 0x7, 'reflection': 0x7,},
+          'e/w': {'rotation': 0x7, 'reflection': 0x3,},
+          'ne/sw': {'rotation': 0x7, 'reflection': 0x1,},
+          'nw/se': {'rotation': 0x7, 'reflection': 0x5,},},
+    0x4: {'n/s': {'rotation': 0x8, 'reflection': 0x6,},
+          'e/w': {'rotation': 0x8, 'reflection': 0x2,},
+          'ne/sw': {'rotation': 0x8, 'reflection': 0x8,},
+          'nw/se': {'rotation': 0x8, 'reflection': 0x4,},},
+    0x5: {'n/s': {'rotation': 0x1, 'reflection': 0x5,},
+          'e/w': {'rotation': 0x1, 'reflection': 0x1,},
+          'ne/sw': {'rotation': 0x1, 'reflection': 0x7,},
+          'nw/se': {'rotation': 0x1, 'reflection': 0x3,},},
+    0x6: {'n/s': {'rotation': 0x2, 'reflection': 0x4,},
+          'e/w': {'rotation': 0x2, 'reflection': 0x8,},
+          'ne/sw': {'rotation': 0x2, 'reflection': 0x6,},
+          'nw/se': {'rotation': 0x2, 'reflection': 0x2,},},
+    0x7: {'n/s': {'rotation': 0x3, 'reflection': 0x3,},
+          'e/w': {'rotation': 0x3, 'reflection': 0x7,},
+          'ne/sw': {'rotation': 0x3, 'reflection': 0x5,},
+          'nw/se': {'rotation': 0x3, 'reflection': 0x1,},},
+    0x8: {'n/s': {'rotation': 0x4, 'reflection': 0x2,},
+          'e/w': {'rotation': 0x4, 'reflection': 0x6,},
+          'ne/sw': {'rotation': 0x4, 'reflection': 0x4,},
+          'nw/se': {'rotation': 0x4, 'reflection': 0x8,},},
+    0x9: {'n/s': {'rotation': 0x9, 'reflection': 0x9,},
+          'e/w': {'rotation': 0x9, 'reflection': 0x9,},
+          'ne/sw': {'rotation': 0x9, 'reflection': 0xA,},
+          'nw/se': {'rotation': 0x9, 'reflection': 0xA,},},
+    0xA: {'n/s': {'rotation': 0xA, 'reflection': 0xA,},
+          'e/w': {'rotation': 0xA, 'reflection': 0xA,},
+          'ne/sw': {'rotation': 0xA, 'reflection': 0x9,},
+          'nw/se': {'rotation': 0xA, 'reflection': 0x9,},},
+    0xB: {'n/s': {'rotation': 0xC, 'reflection': 0xB,},
+          'e/w': {'rotation': 0xC, 'reflection': 0xC,},
+          'ne/sw': {'rotation': 0xC, 'reflection': 0xE,},
+          'nw/se': {'rotation': 0xC, 'reflection': 0xD,},},
+    0xC: {'n/s': {'rotation': 0xB, 'reflection': 0xC,},
+          'e/w': {'rotation': 0xB, 'reflection': 0xB,},
+          'ne/sw': {'rotation': 0xB, 'reflection': 0xD,},
+          'nw/se': {'rotation': 0xB, 'reflection': 0xE,},},
+    0xD: {'n/s': {'rotation': 0xE, 'reflection': 0xE,},
+          'e/w': {'rotation': 0xE, 'reflection': 0xD,},
+          'ne/sw': {'rotation': 0xE, 'reflection': 0xC,},
+          'nw/se': {'rotation': 0xE, 'reflection': 0xB,},},
+    0xE: {'n/s': {'rotation': 0xD, 'reflection': 0xD,},
+          'e/w': {'rotation': 0xD, 'reflection': 0xE,},
+          'ne/sw': {'rotation': 0xD, 'reflection': 0xB,},
+          'nw/se': {'rotation': 0xD, 'reflection': 0xC,},},
+    0xF: {'n/s': {'rotation': 0xF, 'reflection': 0xF,},
+          'e/w': {'rotation': 0xF, 'reflection': 0xF,},
+          'ne/sw': {'rotation': 0xF, 'reflection': 0xA,},
+          'nw/se': {'rotation': 0xF, 'reflection': 0xA,},},
     
     }
 
@@ -88,9 +88,9 @@ def cross(axis, point, side):
 
 # from https://stackoverflow.com/a/47198877
 def flipCoords(center, axis, point, symmetry_type):
-    if symmetry_type == 'rotational':
+    if symmetry_type == 'rotation':
         return center + (center - point)
-    if symmetry_type == 'reflectional':
+    if symmetry_type == 'reflection':
         print(f'   point: {point}')
         d = axis[1] - axis[0]
         det = d.se*d.se + d.sw*d.sw
@@ -99,7 +99,7 @@ def flipCoords(center, axis, point, symmetry_type):
         return closest + (closest - point)
 
 
-def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', symmetry_type='rotational'):
+def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', symmetry_type='rotation'):
     #choose axis
     #mirror terrain across axis
     #mirror features across axis
@@ -166,25 +166,20 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
     objs_iter = tgm.chunks['OBJS'].objs.copy()
     for o in objs_iter:
         if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
-            o.fh = None
-            new_o = deepcopy(o)
-            new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
-            new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
-            new_o.header.editor_id = tgm.chunks['GAME'].next_id
-            new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
-            tgm.chunks['GAME'].next_id += 1
-            tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
-            tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
-            tgm.chunks['OBJS'].objs.append(new_o)
+            # TODO Enable company mirroring
+            if type(o) != tgmlib.Company:
+                o.fh = None
+                new_o = deepcopy(o)
+                new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
+                new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+                new_o.header.editor_id = tgm.chunks['GAME'].next_id
+                new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
+                tgm.chunks['GAME'].next_id += 1
+                tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
+                tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
+                tgm.chunks['OBJS'].objs.append(new_o)
         else:
             tgm.chunks['GAME'].ids[o.header.editor_id] = False
             tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
-    
-            
-        
-tgm = tgmlib.tgmFile('../../../Mod-Test-Only/Maps/1v1 Maps/Vargen 1.6.tgm')
-tgm.load()
-mirror(tgm, symmetry_axis='n/s', symmetry_type='reflectional', side='negative')
-tgm.write('../../../Mod-Test-Only/Maps/_MIRROR4.TGM')
     
