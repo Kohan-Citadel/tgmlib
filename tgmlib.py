@@ -275,9 +275,13 @@ class tgmFile:
                         print(f'Invalid ID state {val} at id {i} in chunk GAME')
                         raise SystemExit(1)
                 (self.ct_ids,) = struct.unpack('=I', in_fh.read(4))
-                self.obj_flags = []
-                for _ in range(start_pos + iff.data.children[10].length - in_fh.tell()):
-                    self.obj_flags.append(struct.unpack('=B', in_fh.read(1))[0])
+                self.load_flags = []
+                for _ in range(4096):
+                    bitflag = struct.unpack('=B', in_fh.read(1))[0]
+                    for _ in range(0,8):
+                        self.load_flags.append(bitflag&1 == True)
+                        bitflag >>= 1
+                (self.data,) = struct.unpack('=68s', in_fh.read(68))
             
         def pack(self):
             data = struct.pack('<II', self.first_id, self.next_id,)
@@ -288,7 +292,14 @@ class tgmFile:
                 else:
                     data += struct.pack('<H', 0xFFFF)
             data += struct.pack('<I', self.ct_ids,)
-            data += struct.pack(f'<{len(self.obj_flags)}B', *self.obj_flags)
+            bitflag = 0
+            for i in range(len(self.load_flags)):
+                if self.load_flags[i] is True:
+                    bitflag |= 0b1 << i
+                if i > 0 and (i+1) % 8 == 0:
+                    data += struct.pack('<B', bitflag)
+                    bitflag = 0
+            data += struct.pack('<68s', self.data,)
             data = struct.pack('>4sI', b'GAME', len(data)) + data
             return data 
     
