@@ -149,9 +149,11 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
             new_f.header.editor_id = tgm.chunks['GAME'].next_id
             tgm.chunks['GAME'].next_id += 1
             tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
+            tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
             tgm.chunks['FTRS'].features.append(new_f)
         else:
             tgm.chunks['GAME'].ids[f.header.editor_id] = False
+            tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
             tgm.chunks['FTRS'].features.pop(tgm.chunks['FTRS'].features.index(f))
     
 # =============================================================================
