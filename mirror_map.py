@@ -83,6 +83,7 @@ def cross(axis, point, side):
         #print(f'({point.se},{point.sw}) < 0')
         return True
     else:
+        #TODO handle objs on axis properly
         return False
 
 # from https://stackoverflow.com/a/47198877
@@ -110,26 +111,27 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
     size_sw = tgm.chunks['EDTR'].size_sw
     match symmetry_axis:
         case 'north/south'|'n/s':
-            axis = [P(0,0), P(size_se-1, size_sw-1)]
+            axis = [P(0,0), P(size_se, size_sw)]
             symmetry_axis = 'n/s'
         case 'east/west'|'e/w':
-            axis = [P(0, size_sw-1), P(size_se-1, 0)]
+            axis = [P(0, size_sw), P(size_se, 0)]
             symmetry_axis = 'e/w'
         case 'north-east/south-west'|'ne/sw':
-            axis = [P((size_se-1)/2, 0), P((size_se-1)/2, size_sw)]
+            axis = [P((size_se)/2, 0), P((size_se)/2, size_sw)]
             symmetry_axis = 'ne/sw'
         case 'north-west/south-east'|'nw/se':
-            axis = [P(0, (size_sw-1)/2), P(size_se, (size_sw-1)/2)]
+            axis = [P(0, (size_sw)/2), P(size_se, (size_sw)/2)]
             symmetry_axis = 'nw/se'
         case _:
             print(f"invalid axis '{axis}'")
     
-    center = P((size_se-1)/2, (size_sw-1)/2)
+    center = P((size_se)/2, (size_sw)/2)
     
     for se in range(size_se):
         for sw in range(size_sw):
             if cross(axis, P(se,sw), side):
-                new_pos = flipCoords(center, axis, P(se, sw), symmetry_type)
+                new_pos = flipCoords(center, axis, P(se+0.5, sw+0.5), symmetry_type)
+                print(new_pos)
                 tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
                 new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
                 if new_tile.layout in tile_symmetries:
@@ -161,25 +163,28 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
             tgm.chunks['FIDX'].count -= 1
             tgm.chunks['FIDX'].sizes.pop(pop_index)
     
-# =============================================================================
-#     objs_iter = tgm.chunks['OBJS'].objs.copy()
-#     for o in objs_iter:
-#         if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
-#             o.fh = None
-#             new_o = deepcopy(o)
-#             new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
-#             new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
-#             new_o.header.editor_id = tgm.chunks['GAME'].next_id
-#             tgm.chunks['GAME'].next_id += 1
-#             tgm.chunks['OBJS'].objs.append(new_o)
-#         else:
-#             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
-# =============================================================================
+    objs_iter = tgm.chunks['OBJS'].objs.copy()
+    for o in objs_iter:
+        if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
+            o.fh = None
+            new_o = deepcopy(o)
+            new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
+            new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+            new_o.header.editor_id = tgm.chunks['GAME'].next_id
+            new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
+            tgm.chunks['GAME'].next_id += 1
+            tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
+            tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
+            tgm.chunks['OBJS'].objs.append(new_o)
+        else:
+            tgm.chunks['GAME'].ids[o.header.editor_id] = False
+            tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
+            tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
     
             
         
-tgm = tgmlib.tgmFile('../../../Mod-Test-Only/Maps/mirror_test.tgm')
+tgm = tgmlib.tgmFile('../../../Mod-Test-Only/Maps/1v1 Maps/Vargen 1.6.tgm')
 tgm.load()
-mirror(tgm, symmetry_axis='n/s', symmetry_type='reflectional', side='positive')
-tgm.write('../../../Mod-Test-Only/Maps/_MIRROR.TGM')
+mirror(tgm, symmetry_axis='n/s', symmetry_type='reflectional', side='negative')
+tgm.write('../../../Mod-Test-Only/Maps/_MIRROR4.TGM')
     

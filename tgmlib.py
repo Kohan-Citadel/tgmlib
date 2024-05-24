@@ -266,7 +266,7 @@ class tgmFile:
                 start_pos = in_fh.tell()
                 (self.count,) = struct.unpack('=I', in_fh.read(4))
                 self.sizes = []
-                self.sizes.append(*struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
+                self.sizes.extend(struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
         
         def pack(self):
             data = struct.pack(f'<{self.count+1}I', self.count, *self.sizes)
@@ -310,7 +310,7 @@ class tgmFile:
             bitflag = 0
             for i in range(len(self.load_flags)):
                 if self.load_flags[i] is True:
-                    bitflag |= 0b1 << i
+                    bitflag |= 0b1 << (i % 8)
                 if i > 0 and (i+1) % 8 == 0:
                     data += struct.pack('<B', bitflag)
                     bitflag = 0
