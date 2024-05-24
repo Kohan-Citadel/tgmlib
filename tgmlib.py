@@ -259,6 +259,21 @@ class tgmFile:
             return data                
     
     
+    class FidxChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[7].data_offset)
+                start_pos = in_fh.tell()
+                (self.count,) = struct.unpack('=I', in_fh.read(4))
+                self.sizes = []
+                self.sizes.append(*struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
+        
+        def pack(self):
+            data = struct.pack(f'<{self.count+1}I', self.count, *self.sizes)
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'FIDX', len(data)) + data
+            return data 
+    
     class GameChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
@@ -447,6 +462,7 @@ class tgmFile:
                 self.chunks = {}
                 self.chunks['EDTR'] = self.EdtrChunk(self.filename, self.iff)
                 self.chunks['MGRD'] = self.MgrdChunk(self.filename, self.iff, self.chunks['EDTR'])
+                self.chunks['FIDX'] = self.FidxChunk(self.filename, self.iff)
                 self.chunks['GAME'] = self.GameChunk(self.filename, self.iff)
                 self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
                 self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff, self.chunks['TYPE'])

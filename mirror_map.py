@@ -151,10 +151,15 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
             tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
             tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
             tgm.chunks['FTRS'].features.append(new_f)
+            tgm.chunks['FIDX'].count += 1
+            tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
         else:
             tgm.chunks['GAME'].ids[f.header.editor_id] = False
             tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
-            tgm.chunks['FTRS'].features.pop(tgm.chunks['FTRS'].features.index(f))
+            pop_index = tgm.chunks['FTRS'].features.index(f)
+            tgm.chunks['FTRS'].features.pop(pop_index)
+            tgm.chunks['FIDX'].count -= 1
+            tgm.chunks['FIDX'].sizes.pop(pop_index)
     
 # =============================================================================
 #     objs_iter = tgm.chunks['OBJS'].objs.copy()
