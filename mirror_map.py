@@ -1,6 +1,7 @@
 import tgmlib
 from maplib import Position as P
 from copy import deepcopy
+import math
 
 tile_symmetries = {
     0x0: {'n/s': {'rotation': 0x0, 'reflection': 0x0,},
@@ -86,11 +87,20 @@ def cross(axis, point, side):
         return False
 
 # from https://stackoverflow.com/a/47198877
-def flipCoords(center, axis, point, symmetry_type):
+def flipCoords(center, point, symmetry_type, angle=None, axis=None, debug=False):
     if symmetry_type == 'rotation':
-        return center + (center - point)
+        # creates vector from map center to point, transpose to origin
+        v1 = center - point
+        se2 = v1.se * math.cos(angle) - v1.sw * math.sin(angle)
+        sw2 = v1.se * math.sin(angle) + v1.sw * math.cos(angle)
+        if debug:
+            print(f"start pos: {point}")
+            print(f"  v1 {v1}\n  se2 = {v1.se * math.cos(angle)} - {v1.sw * math.sin(angle)}\n  sw2 = {v1.se * math.sin(angle)} + {v1.sw * math.cos(angle)}")
+            print(f"  v2: {P(se2, sw2)}")
+            print(f"  final pos: {P(se2, sw2) + center}")
+        return center - P(se2, sw2)
     if symmetry_type == 'reflection':
-        print(f'   point: {point}')
+        #print(f'   point: {point}')
         d = axis[1] - axis[0]
         det = d.se*d.se + d.sw*d.sw
         a = (d.sw*(point.sw-axis[0].sw)+d.se*(point.se-axis[0].se))/det
@@ -108,6 +118,9 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     size_se = tgm.chunks['EDTR'].size_se
     size_sw = tgm.chunks['EDTR'].size_sw
     center = P((size_se)/2, (size_sw)/2)
+    
+    # radians between mirroring regions
+    rotational_offset = 2 * math.pi / sections
     
     match sections:
         case 2:
@@ -151,82 +164,93 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                     case 'west':
                         sides = ('negative', 'negative',)
                         
-             elif source_region in ('north-east', 'south-east', 'south-west', 'north-west'):
-                 symmetry_axes = 'orthogonal'
-                 axes = [[P(0,0), P(size_se, size_sw)],
-                         [P(0, size_sw), P(size_se, 0)],]
-                 match source_region:
-                     case 'north-east':
-                         sides = ('positive', 'positive',)
-                     case 'south-east':
-                         sides = ('positive', 'negative',)
-                     case 'south-west':
-                         sides = ('negative', 'negative',)
-                     case 'north-west':
-                         sides = ('negative', 'positive',)
+            elif source_region in ('north-east', 'south-east', 'south-west', 'north-west'):
+                symmetry_axes = 'orthogonal'
+                axes = [[P(0,0), P(size_se, size_sw)],
+                        [P(0, size_sw), P(size_se, 0)],]
+                match source_region:
+                    case 'north-east':
+                        sides = ('positive', 'positive',)
+                    case 'south-east':
+                        sides = ('positive', 'negative',)
+                    case 'south-west':
+                        sides = ('negative', 'negative',)
+                    case 'north-west':
+                        sides = ('negative', 'positive',)
                          
-             else:
-                 print(f"invalid source quadrant '{source_region}'\nsource quadrant must be one of ('north', 'east', 'south', 'west', 'north-east', 'south-east', 'south-west', 'north-west')")
-                 raise SystemExit()
-         case _:
-             print(f"invalid sections count '{sections}'\nsections must be 2 or 4")
-             raise SystemExit()
+            else:
+                print(f"invalid source quadrant '{source_region}'\nsource quadrant must be one of ('north', 'east', 'south', 'west', 'north-east', 'south-east', 'south-west', 'north-west')")
+                raise SystemExit()
+        case _:
+            print(f"invalid sections count '{sections}'\nsections must be 2 or 4")
+            raise SystemExit()
     
     
     for se in range(size_se):
         for sw in range(size_sw):
-            crosses = [cross(axis, P(se,sw), side) for axis, side in zip(axes, sides)]
+            crosses = [cross(axis, P(se+0.5,sw+0.5), side) for axis, side in zip(axes, sides)]
             if all(crosses):
-                new_pos = flipCoords(center, axis, P(se+0.5, sw+0.5), symmetry_type)
-                print(new_pos)
-                tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
-                new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
-                if new_tile.layout in tile_symmetries:
-                    print(f'flipping tile')
-                    new_tile.layout = tile_symmetries[new_tile.layout][symmetry_axis][symmetry_type]
-                else:
-                    new_tile.terrain1 = 0xB
-                    new_tile.terrain2 = 0xB
+                print('----------------')
+                print(f'initial: {P(se,sw)}')
+                for pos in range(1, sections):
+                    
+                    debug = True if pos == 2 else False
+                    new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*pos, axis=axes[0], debug=debug)
+                    print(f'pos {pos}: {new_pos}')
+                    tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
+                    new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
+                    if new_tile.layout in tile_symmetries:
+                        #print(f'flipping tile')
+                        try:
+                            new_tile.layout = tile_symmetries[new_tile.layout][symmetry_axis][symmetry_type]
+                        except Exception:
+                            #print('  missing tile rotation info')
+                            pass
+                    else:
+                        new_tile.terrain1 = 0xB
+                        new_tile.terrain2 = 0xB
     
-    ftrs_iter = tgm.chunks['FTRS'].features.copy()
-    for f in ftrs_iter:
-        if cross(axis, P(f.header.hotspot_se, f.header.hotspot_sw), side):
-            f.fh = None
-            new_f = deepcopy(f)
-            new_pos = flipCoords(center, axis, P(f.header.hotspot_se, f.header.hotspot_sw), symmetry_type)
-            new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
-            new_f.header.editor_id = tgm.chunks['GAME'].next_id
-            tgm.chunks['GAME'].next_id += 1
-            tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
-            tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
-            tgm.chunks['FTRS'].features.append(new_f)
-            tgm.chunks['FIDX'].count += 1
-            tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
-        else:
-            tgm.chunks['GAME'].ids[f.header.editor_id] = False
-            tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
-            pop_index = tgm.chunks['FTRS'].features.index(f)
-            tgm.chunks['FTRS'].features.pop(pop_index)
-            tgm.chunks['FIDX'].count -= 1
-            tgm.chunks['FIDX'].sizes.pop(pop_index)
-    
-    objs_iter = tgm.chunks['OBJS'].objs.copy()
-    for o in objs_iter:
-        if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
-            # TODO Enable company mirroring
-            if type(o) != tgmlib.Company:
-                o.fh = None
-                new_o = deepcopy(o)
-                new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
-                new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
-                new_o.header.editor_id = tgm.chunks['GAME'].next_id
-                new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
-                tgm.chunks['GAME'].next_id += 1
-                tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
-                tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
-                tgm.chunks['OBJS'].objs.append(new_o)
-        else:
-            tgm.chunks['GAME'].ids[o.header.editor_id] = False
-            tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
-            tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+# =============================================================================
+#     ftrs_iter = tgm.chunks['FTRS'].features.copy()
+#     for f in ftrs_iter:
+#         if cross(axis, P(f.header.hotspot_se, f.header.hotspot_sw), side):
+#             f.fh = None
+#             new_f = deepcopy(f)
+#             new_pos = flipCoords(center, axis, P(f.header.hotspot_se, f.header.hotspot_sw), symmetry_type)
+#             new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
+#             new_f.header.editor_id = tgm.chunks['GAME'].next_id
+#             tgm.chunks['GAME'].next_id += 1
+#             tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
+#             tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
+#             tgm.chunks['FTRS'].features.append(new_f)
+#             tgm.chunks['FIDX'].count += 1
+#             tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
+#         else:
+#             tgm.chunks['GAME'].ids[f.header.editor_id] = False
+#             tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
+#             pop_index = tgm.chunks['FTRS'].features.index(f)
+#             tgm.chunks['FTRS'].features.pop(pop_index)
+#             tgm.chunks['FIDX'].count -= 1
+#             tgm.chunks['FIDX'].sizes.pop(pop_index)
+#     
+#     objs_iter = tgm.chunks['OBJS'].objs.copy()
+#     for o in objs_iter:
+#         if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
+#             # TODO Enable company mirroring
+#             if type(o) != tgmlib.Company:
+#                 o.fh = None
+#                 new_o = deepcopy(o)
+#                 new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
+#                 new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+#                 new_o.header.editor_id = tgm.chunks['GAME'].next_id
+#                 new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
+#                 tgm.chunks['GAME'].next_id += 1
+#                 tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
+#                 tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
+#                 tgm.chunks['OBJS'].objs.append(new_o)
+#         else:
+#             tgm.chunks['GAME'].ids[o.header.editor_id] = False
+#             tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
+#             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+# =============================================================================
     

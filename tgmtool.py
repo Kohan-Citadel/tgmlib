@@ -44,10 +44,10 @@ def mirror(args: argparse.Namespace):
     source_path = Path(args.source).resolve()
     if source_path.suffix.upper() != '.TGM':
         print(f'tgmtool.py(45) {source_path.name} is not a .TGM file.')
-        exit()
+        raise SystemExit()
     map_file = tgmlib.tgmFile(source_path)
     map_file.load()
-    mirror_map.mirror(map_file, symmetry_axis=args.symmetry_axis, symmetry_type=args.symmetry_type, side=args.side)
+    mirror_map.mirror(map_file, args.sections, args.source_region, symmetry_type=args.symmetry_type)
     if args.output:
         dest_path = Path(args.output).resolve()
     else:
@@ -72,10 +72,11 @@ update_parse.add_argument('name_mapping', type=str, help='path to JSON mapping b
 mirror_parse = sub_parsers.add_parser("mirror")
 mirror_parse.set_defaults(func=mirror)
 mirror_parse.add_argument('source', type=str, help='path to target TGM file')
+mirror_parse.add_argument('sections', type=int, choices=(2,4,), help='number of sections the map will be divided into when mirroring')
+mirror_parse.add_argument('source_region', type=str, help='which region/section will be mirrored into the other regions')
 mirror_parse.add_argument('-o', '--output', type=str, help='path to save source file')
-mirror_parse.add_argument('-a', '--symmetry-axis', type=str, default='n/s', choices=('north/south', 'n/s', 'east/west', 'e/w', 'north-east/south-west', 'ne/sw', 'north-west/south-east', 'nw/se'), help='the line to use as the axis of symmetry')
 mirror_parse.add_argument('-t', '--symmetry-type', type=str, default='rotation', choices=('rotation', 'reflection',), help='the type of symmetry. use reflection for a mirror image, reflection for a filpped mirror image')
-mirror_parse.add_argument('-s', '--side', type=str, default='positive', choices=('positive', 'negative',), help='which side of the axis to mirror (the other side will be overwritten). positive and negative refer to an implementation detail and do not visually relate to the sides of the axis, so try negative if positive does not work correctly.')
+
 
 if __name__ == '__main__':
     args = main_parse.parse_args()
