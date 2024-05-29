@@ -1,7 +1,6 @@
 import tgmlib
-from maplib import Position
+from maplib import Position as P
 from copy import deepcopy
-P = Position
 
 tile_symmetries = {
     0x0: {'n/s': {'rotation': 0x0, 'reflection': 0x0,},
@@ -98,8 +97,7 @@ def flipCoords(center, axis, point, symmetry_type):
         closest = P(axis[0].se+a*d.se, axis[0].sw+a*d.sw)
         return closest + (closest - point)
 
-
-def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', symmetry_type='rotation'):
+def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     #choose axis
     #mirror terrain across axis
     #mirror features across axis
@@ -109,27 +107,76 @@ def mirror(tgm: tgmlib.tgmFile, symmetry_axis='north/south', side='positive', sy
     #update GAME chunk if necessary
     size_se = tgm.chunks['EDTR'].size_se
     size_sw = tgm.chunks['EDTR'].size_sw
-    match symmetry_axis:
-        case 'north/south'|'n/s':
-            axis = [P(0,0), P(size_se, size_sw)]
-            symmetry_axis = 'n/s'
-        case 'east/west'|'e/w':
-            axis = [P(0, size_sw), P(size_se, 0)]
-            symmetry_axis = 'e/w'
-        case 'north-east/south-west'|'ne/sw':
-            axis = [P((size_se)/2, 0), P((size_se)/2, size_sw)]
-            symmetry_axis = 'ne/sw'
-        case 'north-west/south-east'|'nw/se':
-            axis = [P(0, (size_sw)/2), P(size_se, (size_sw)/2)]
-            symmetry_axis = 'nw/se'
-        case _:
-            print(f"invalid axis '{axis}'")
-    
     center = P((size_se)/2, (size_sw)/2)
+    
+    match sections:
+        case 2:
+            #half map
+            symmetry_type = kwargs['symmetry_type']
+            match source_region:
+                case 'north'|'south':
+                    axes = [[P(0, size_sw), P(size_se, 0)]]
+                    sides = ('positive',) if source_region == 'north' else ('negative',)
+                    symmetry_axis = 'e/w'
+                case 'east'|'west':
+                    axes = [[P(0,0), P(size_se, size_sw)]]
+                    sides = ('positive',) if source_region == 'east' else ('negative',)
+                    symmetry_axis = 'n/s'
+                case 'north-east'|'south-west':
+                    axes = [[P(0, (size_sw)/2), P(size_se, (size_sw)/2)]]
+                    sides = ('positive',) if source_region == 'north-east' else ('negative',)
+                    symmetry_axis = 'nw/se'
+                case 'north-west'|'south-east':
+                    axes = [[P((size_se)/2, 0), P((size_se)/2, size_sw)]]
+                    sides = ('positive',) if source_region == 'south-east' else ('negative',)
+                    symmetry_axis = 'nw/se'
+                case _:
+                    print(f"invalid source region '{source_region}'")
+                    raise SystemExit()
+        case 4:
+            # quadrants
+            symmetry_type = 'rotation'
+            if source_region in ('north', 'east', 'south', 'west'):
+                symmetry_axes = 'diagonal'
+                axes = [[P((size_se)/2, 0), P((size_se)/2, size_sw)],
+                        [P(0, (size_sw)/2), P(size_se, (size_sw)/2)],]
+                # sides contains the correct side values for each of the two axes for the given quadrant
+                match source_region:
+                    case 'north':
+                        sides = ('negative', 'positive',)
+                    case 'east':
+                        sides = ('positive', 'positive',)
+                    case 'south':
+                        sides = ('positive', 'negative',)
+                    case 'west':
+                        sides = ('negative', 'negative',)
+                        
+             elif source_region in ('north-east', 'south-east', 'south-west', 'north-west'):
+                 symmetry_axes = 'orthogonal'
+                 axes = [[P(0,0), P(size_se, size_sw)],
+                         [P(0, size_sw), P(size_se, 0)],]
+                 match source_region:
+                     case 'north-east':
+                         sides = ('positive', 'positive',)
+                     case 'south-east':
+                         sides = ('positive', 'negative',)
+                     case 'south-west':
+                         sides = ('negative', 'negative',)
+                     case 'north-west':
+                         sides = ('negative', 'positive',)
+                         
+             else:
+                 print(f"invalid source quadrant '{source_region}'\nsource quadrant must be one of ('north', 'east', 'south', 'west', 'north-east', 'south-east', 'south-west', 'north-west')")
+                 raise SystemExit()
+         case _:
+             print(f"invalid sections count '{sections}'\nsections must be 2 or 4")
+             raise SystemExit()
+    
     
     for se in range(size_se):
         for sw in range(size_sw):
-            if cross(axis, P(se,sw), side):
+            crosses = [cross(axis, P(se,sw), side) for axis, side in zip(axes, sides)]
+            if all(crosses):
                 new_pos = flipCoords(center, axis, P(se+0.5, sw+0.5), symmetry_type)
                 print(new_pos)
                 tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
