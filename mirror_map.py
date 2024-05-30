@@ -210,47 +210,56 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                         new_tile.terrain1 = 0xB
                         new_tile.terrain2 = 0xB
     
-# =============================================================================
-#     ftrs_iter = tgm.chunks['FTRS'].features.copy()
-#     for f in ftrs_iter:
-#         if cross(axis, P(f.header.hotspot_se, f.header.hotspot_sw), side):
-#             f.fh = None
-#             new_f = deepcopy(f)
-#             new_pos = flipCoords(center, axis, P(f.header.hotspot_se, f.header.hotspot_sw), symmetry_type)
-#             new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
-#             new_f.header.editor_id = tgm.chunks['GAME'].next_id
-#             tgm.chunks['GAME'].next_id += 1
-#             tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
-#             tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
-#             tgm.chunks['FTRS'].features.append(new_f)
-#             tgm.chunks['FIDX'].count += 1
-#             tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
-#         else:
-#             tgm.chunks['GAME'].ids[f.header.editor_id] = False
-#             tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
-#             pop_index = tgm.chunks['FTRS'].features.index(f)
-#             tgm.chunks['FTRS'].features.pop(pop_index)
-#             tgm.chunks['FIDX'].count -= 1
-#             tgm.chunks['FIDX'].sizes.pop(pop_index)
-#     
-#     objs_iter = tgm.chunks['OBJS'].objs.copy()
-#     for o in objs_iter:
-#         if cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side):
-#             # TODO Enable company mirroring
-#             if type(o) != tgmlib.Company:
-#                 o.fh = None
-#                 new_o = deepcopy(o)
-#                 new_pos = flipCoords(center, axis, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type)
-#                 new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
-#                 new_o.header.editor_id = tgm.chunks['GAME'].next_id
-#                 new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
-#                 tgm.chunks['GAME'].next_id += 1
-#                 tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
-#                 tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
-#                 tgm.chunks['OBJS'].objs.append(new_o)
-#         else:
-#             tgm.chunks['GAME'].ids[o.header.editor_id] = False
-#             tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
-#             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
-# =============================================================================
+    ftrs_iter = tgm.chunks['FTRS'].features.copy()
+    for f in ftrs_iter:
+        crosses = [cross(axis, P(f.header.hotspot_se, f.header.hotspot_sw), side) for axis, side in zip(axes, sides)]
+        if all(crosses):
+            for pos in range(1, sections):
+                f.fh = None
+                new_f = deepcopy(f)
+                new_pos = new_pos = flipCoords(center, P(f.header.hotspot_se, f.header.hotspot_sw), symmetry_type, angle=rotational_offset*pos, axis=axes[0])
+                new_f.header.hotspot_se, new_f.header.hotspot_sw = new_pos.se, new_pos.sw
+                # sets each player owned ftr to a new player per region
+                if 0 <= new_f.header.player <= 7:
+                    new_f.header.player = (new_f.header.player + pos) % 8
+                new_f.header.editor_id = tgm.chunks['GAME'].next_id
+                tgm.chunks['GAME'].next_id += 1
+                tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
+                tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
+                tgm.chunks['FTRS'].features.append(new_f)
+                tgm.chunks['FIDX'].count += 1
+                tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
+        else:
+            tgm.chunks['GAME'].ids[f.header.editor_id] = False
+            tgm.chunks['GAME'].load_flags[f.header.editor_id] = False
+            pop_index = tgm.chunks['FTRS'].features.index(f)
+            tgm.chunks['FTRS'].features.pop(pop_index)
+            tgm.chunks['FIDX'].count -= 1
+            tgm.chunks['FIDX'].sizes.pop(pop_index)
     
+    objs_iter = tgm.chunks['OBJS'].objs.copy()
+    for o in objs_iter:
+        crosses = [cross(axis, P(o.header.hotspot_se, o.header.hotspot_sw), side) for axis, side in zip(axes, sides)]
+        if all(crosses):
+            for pos in range(1, sections):
+                # TODO Enable company mirroring
+                if type(o) != tgmlib.Company:
+                    o.fh = None
+                    new_o = deepcopy(o)
+                    new_pos = flipCoords(center, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type, angle=rotational_offset*pos, axis=axes[0])
+                    new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+                    new_o.header.editor_id = tgm.chunks['GAME'].next_id
+                    new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
+                    # sets each player owned obj to a new player per region
+                    if 0 <= new_o.header.player <= 7:
+                        new_o.header.player = (new_o.header.player + pos) % 8
+                    tgm.chunks['GAME'].next_id += 1
+                    tgm.chunks['GAME'].ids[new_o.header.editor_id] = True
+                    tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
+                    tgm.chunks['OBJS'].objs.append(new_o)
+        else:
+            tgm.chunks['GAME'].ids[o.header.editor_id] = False
+            tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
+            tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+    
+
