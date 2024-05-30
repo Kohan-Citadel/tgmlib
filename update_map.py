@@ -68,7 +68,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
         index_mapping[old_index] = new_index
     
     for f in old_map.chunks['FTRS'].features:
-        f['index'] = index_mapping[f['index']] 
+        f.header.index = index_mapping[f.header.index] 
         
     def unitUpdateModifiers(unit_ini, unit_index, hero_level=0):
         eb_name = 'ElementBonus'
@@ -114,7 +114,11 @@ def update(old_map, ref_map, name_mapping, dest_path):
                     building_ini = ConfigParser(inline_comment_prefixes=(';',))
                     name = ref_map.chunks['TYPE'].by_index[obj.header.index]['name']
                     filepath = Path(f'./Data/ObjectData/Buildings/{name}.INI').resolve()
+                    if not filepath.exists():
+                        print(f'{filepath} does not exist!')
+                        raise SystemExit()
                     building_ini.read(filepath)
+                    print(f'reading {filepath}')
                     obj.current_hp, obj.max_hp = (float(building_ini['ObjectData']['MaxHitPoints']),)*2
     
             case 0x3C:
@@ -167,6 +171,9 @@ def update(old_map, ref_map, name_mapping, dest_path):
                         
                         #print(f'  {ref_type["name"]} {name} {level}')
                         filepath = Path(f'./Data/ObjectData/Heroes/{name}.INI').resolve()
+                        if not filepath.exists():
+                            print(f'{filepath} does not exist!')
+                            raise SystemExit()
                         unit_ini.read(filepath)
                         unitUpdateModifiers(unit_ini, unit.unit_index, hero_level=level)
                         old_map.chunks['HROS'].heroes[name]['editor_id'] = unit.header.editor_id
@@ -178,6 +185,9 @@ def update(old_map, ref_map, name_mapping, dest_path):
                     else:
                         name = ref_type['name']
                         filepath = Path(f'./Data/ObjectData/Units/{name}.INI').resolve()
+                        if not filepath.exists():
+                            print(f'{filepath} does not exist!')
+                            raise SystemExit()
                         unit_ini.read(filepath)
                         unit.max_hp = unit.current_hp = float(unit_ini['ObjectData']['MaxHitPoints'])
                         unitUpdateModifiers(unit_ini, unit.unit_index)

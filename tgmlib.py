@@ -197,10 +197,13 @@ class tgmFile:
     class MgrdChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file, EDTR):
             with open(filename, "rb") as in_fh:
-                # Skip required, fixed int at begining of chunk
-                in_fh.seek(iff.data.children[4].data_offset + 4)
+                in_fh.seek(iff.data.children[4].data_offset)
+                (self.required,) = struct.unpack('=I', in_fh.read(4))
+                self.EDTR_ref = EDTR
                 print(f'Reading first tile @ {in_fh.tell()}')
-                self.tiles = [self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(EDTR.size_se*EDTR.size_sw)]
+                self.tiles = []
+                for _ in range(self.EDTR_ref.size_se):
+                    self.tiles.append([self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(self.EDTR_ref.size_sw)])
                 
         class GridTile:
             def __init__(self, terrain, layout):
@@ -210,46 +213,110 @@ class tgmFile:
                 self.terrain2 = terrain & 15
                 self.display = layout >> 4
                 self.layout = layout & 15
+            
+            def copy(self):
+                return type(self)(self._terrain, self._layout)
+            
+            def pack(self):
+                terrain = (self.terrain1 << 4) | self.terrain2
+                layout = (self.display << 4) | self.layout
+                return struct.pack('>BB', terrain, layout)
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.required)
+            
+            for row in self.tiles:
+                for tile in row:
+                    data += tile.pack()
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'MGRD', len(data)) + data
+            return data
                 
     
     class FtrsChunk:
-        def __init__(self, filename: str, iff: ifflib.iff_file):
+        def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[6].data_offset)
                 start_pos = in_fh.tell()
                 (self.load,) = struct.unpack('=i', in_fh.read(4))
                 self.features = []
                 while (in_fh.tell() < start_pos + iff.data.children[6].length - 12):
-                    feature = {}
-                    (feature['header'],
-                     feature['index'],
-                     feature['editor_id'],
-                     feature['pos_se'],
-                     feature['pos_sw'],) = struct.unpack('=hHIff', in_fh.read(16))
-                    if feature['index'] != 0xFFFF:
-                        (feature['flag'],) = struct.unpack('=H', in_fh.read(2))
-                        if feature['flag'] == 0x0F09:
-                            (feature['data'],) = struct.unpack('4s', in_fh.read(4))
-                    self.features.append(feature)
+                    self.features.append(Feature(in_fh, TYPE))
+                    if self.features[-1].header.index == 0xFFFF:
+                        self.features.pop()
         
         def pack(self):
             data = b''
             data += struct.pack('<I', self.load)
             for feature in self.features:
-                data += struct.pack('=hHIff',
-                                    feature['header'],
-                                    feature['index'],
-                                    feature['editor_id'],
-                                    feature['pos_se'],
-                                    feature['pos_sw'],)
-                if feature['index'] != 0xFFFF:
-                    data += struct.pack('<H', feature['flag'],)
-                    if feature['flag'] == 0x0F09:
-                        data += struct.pack('4s', feature['data'],)
-            
+                data += feature.pack()
+            # Adds empty feature to signify chunk end
+            data += b'\x10\x08\xFF\xFF' + b'\x00'*12
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'FTRS', len(data)) + data
             return data                
+    
+    
+    class FidxChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[7].data_offset)
+                start_pos = in_fh.tell()
+                (self.count,) = struct.unpack('=I', in_fh.read(4))
+                self.sizes = []
+                self.sizes.extend(struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
+        
+        def pack(self):
+            data = struct.pack(f'<{self.count+1}I', self.count, *self.sizes)
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'FIDX', len(data)) + data
+            return data 
+    
+    class GameChunk:
+        def __init__(self, filename: str, iff: ifflib.iff_file):
+            with open(filename, "rb") as in_fh:
+                in_fh.seek(iff.data.children[10].data_offset)
+                start_pos = in_fh.tell()
+                (self.first_id, self.next_id,) = struct.unpack('=II', in_fh.read(8))
+                self.ids = []
+                for i in range(0x8000):
+                    if (val := in_fh.read(2)) == b'\x00\x00':
+                        self.ids.append(True)
+                    elif val == b'\xFF\xFF':
+                        self.ids.append(False)
+                    else:
+                        print(f'Invalid ID state {val} at id {i} in chunk GAME')
+                        raise SystemExit(1)
+                (self.ct_ids,) = struct.unpack('=I', in_fh.read(4))
+                self.load_flags = []
+                for _ in range(4096):
+                    bitflag = struct.unpack('=B', in_fh.read(1))[0]
+                    for _ in range(0,8):
+                        self.load_flags.append(bitflag&1 == True)
+                        bitflag >>= 1
+                (self.data,) = struct.unpack('=68s', in_fh.read(68))
+            
+        def pack(self):
+            data = struct.pack('<II', self.first_id, self.next_id,)
+            
+            for id in self.ids:
+                if id is True:
+                    data += struct.pack('<H', 0)
+                else:
+                    data += struct.pack('<H', 0xFFFF)
+            data += struct.pack('<I', self.ct_ids,)
+            bitflag = 0
+            for i in range(len(self.load_flags)):
+                if self.load_flags[i] is True:
+                    bitflag |= 0b1 << (i % 8)
+                if i > 0 and (i+1) % 8 == 0:
+                    data += struct.pack('<B', bitflag)
+                    bitflag = 0
+            data += struct.pack('<68s', self.data,)
+            data = struct.pack('>4sI', b'GAME', len(data)) + data
+            return data 
     
     
     class TypeChunk:
@@ -369,6 +436,8 @@ class tgmFile:
                 while in_fh.tell() < (iff.data.children[16].data_offset + iff.data.children[16].length - 4):
                 #for _ in range(6):
                     self.objs.append(getMapObjClass(in_fh)(in_fh, TYPE))
+                    if self.objs[-1].header.index == 0xFFFF:
+                        self.objs.pop()
                     #pprint(vars(self.objs[-1]))   
                     #print('')
         
@@ -377,6 +446,8 @@ class tgmFile:
             data += struct.pack('<4s', self.unknown0)
             for obj in self.objs:
                 data += obj.pack()
+            # Adds empty obj to signify chunk end
+            data += b'\x10\x08\xFF\xFF' + b'\x00'*12
             data = addChunkPadding(data)
             data = struct.pack('>4sI', b'OBJS', len(data)) + data
             return data
@@ -391,8 +462,10 @@ class tgmFile:
                 self.chunks = {}
                 self.chunks['EDTR'] = self.EdtrChunk(self.filename, self.iff)
                 self.chunks['MGRD'] = self.MgrdChunk(self.filename, self.iff, self.chunks['EDTR'])
-                self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff)
+                self.chunks['FIDX'] = self.FidxChunk(self.filename, self.iff)
+                self.chunks['GAME'] = self.GameChunk(self.filename, self.iff)
                 self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
+                self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff, self.chunks['TYPE'])
                 self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
                 #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
                 self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
@@ -551,11 +624,15 @@ class Building(MapObj):
             # Settlements
             case 1|5|6|7|8:
                 self.militia = self.MilitiaData(self.fh)
-                
+                if self.fh.read(1) == b'\x00':
+                    uk5_size = 10
+                else:
+                    uk5_size = 9
+                self.fh.seek(-1, 1)
                 (self.unknown5,
                  self.component_bitflag,
                  self.unknown6,
-                 self.inportant0) = struct.unpack('=10sB4sI', self.fh.read(19))
+                 self.inportant0) = struct.unpack(f'={uk5_size}sB4sI', self.fh.read(uk5_size+9))
                 
                 # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
                 pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 6
@@ -589,6 +666,7 @@ class Building(MapObj):
                 for _ in range(0,8):
                     self.ct_components += x&1
                     x >>= 1
+                print(f' comp_flag {self.component_bitflag} yielded {self.ct_components} componenets')
                 # +1 for adtl blank comp
                 print(f'  reading comps @ {self.fh.tell()}')
                 for i in range(self.ct_components + 1):
@@ -1062,7 +1140,22 @@ class Misc(MapObj):
             data += struct.pack(f'<{len(self.data)}s', self.data)
         
         return data
-            
+
+class Feature(MapObj):
+    def __init__(self, in_fh, TYPE):
+        MapObj.__init__(self, in_fh, TYPE)
+        if self.header.index != 0xFFFF:
+            (self.flag1, self.flag2,) = struct.unpack('=BB', self.fh.read(2))
+            if self.flag1 == 0x09 and self.flag2 == 0x0F:
+                (self.data,) = struct.unpack('4s', self.fh.read(4))
+    
+    def pack(self):
+        data = self.header.pack()
+        if self.header.index != 0xFFFF:
+            data += struct.pack('<BB', self.flag1, self.flag2,)
+            if self.flag1 == 0x09 and self.flag2 == 0x0F:
+                data += struct.pack('<4s', self.data,)
+        return data
         
 def findBytes(query, fh, search_start=None ,search_length=None):
     start_pos = fh.tell()

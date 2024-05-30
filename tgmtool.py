@@ -2,6 +2,7 @@ import argparse
 import json
 import tgmlib
 import update_map
+import mirror_map
 from pathlib import Path
 
 def update(args: argparse.Namespace):
@@ -39,6 +40,24 @@ def update(args: argparse.Namespace):
                     old_map.load()
                     update_map.update(old_map, ref_map, name_mapping, dest_path/f.name)
 
+def mirror(args: argparse.Namespace):
+    source_path = Path(args.source).resolve()
+    if source_path.suffix.upper() != '.TGM':
+        print(f'{source_path.name} is not a .TGM file.')
+        raise SystemExit()
+    map_file = tgmlib.tgmFile(source_path)
+    map_file.load()
+    mirror_map.mirror(map_file, args.sections, args.source_region, symmetry_type=args.symmetry_type)
+    if args.output:
+        dest_path = Path(args.output).resolve()
+    else:
+        dest_path = source_path.parent / (source_path.stem + '_mirrored.tgm')
+    if source_path == dest_path:
+        res = input(f'Are you sure you want to overwrite {source_path.stem} with the mirrored result? [y/N]')
+        if res == '' or res.upper() == 'N':
+            dest_path = source_path.parent / (source_path.stem + '_mirrored.tgm')
+    map_file.write(dest_path)
+
 ## Define parsers
 main_parse = argparse.ArgumentParser(prog="tgmtool")
 sub_parsers = main_parse.add_subparsers(required=True, help="available commands")
@@ -49,6 +68,15 @@ update_parse.add_argument('source', type=str, help='path to target TGM file or f
 update_parse.add_argument('dest', type=str, help='path to save source file, or containing folder if multiple source files')
 update_parse.add_argument('type_ref', type=str, help='path to reference TGM file created with desired mod version(s)')
 update_parse.add_argument('name_mapping', type=str, help='path to JSON mapping between old and new type-names')
+
+mirror_parse = sub_parsers.add_parser("mirror")
+mirror_parse.set_defaults(func=mirror)
+mirror_parse.add_argument('source', type=str, help='path to target TGM file')
+mirror_parse.add_argument('sections', type=int, choices=(2,4,), help='number of sections the map will be divided into when mirroring')
+mirror_parse.add_argument('source_region', type=str, choices=('north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west',), help='which region/section will be mirrored into the other regions.')
+mirror_parse.add_argument('-o', '--output', type=str, help='path to save mirrored TGM file')
+mirror_parse.add_argument('-s', '--symmetry-type', type=str, default='rotation', choices=('rotation', 'reflection',), help='the type of symmetry. use reflection for a mirror image, rotation for radial symmetry')
+
 
 if __name__ == '__main__':
     args = main_parse.parse_args()
