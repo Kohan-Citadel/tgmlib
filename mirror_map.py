@@ -157,27 +157,16 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
         for sw in range(size_sw):
             crosses = [cross(axis, P(se+0.5,sw+0.5), side) for axis, side in zip(axes, sides)]
             if all(crosses):
-                print('----------------')
-                print(f'initial: {P(se,sw)}')
                 for pos in range(1, sections):
-                    
-                    debug = True if pos == 2 else False
                     new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*pos, axis=axes[0], debug=debug)
-                    print(f'pos {pos}: {new_pos}')
                     tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
                     new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
-                    if new_tile.layout in tile_symmetries:
-                        #print(f'flipping tile')
-                        try:
-                            new_layout = tile_symmetries[new_tile.layout][symmetry_type]
-                            new_tile.layout = new_layout[pos] if symmetry_type == 'rotation' else new_layout[symmetry_axis]
-                        except Exception:
-                            print('  missing tile rotation info')
-                            new_tile.terrain1 = 0xE
-                            new_tile.terrain2 = 0xE
-                    else:
-                        new_tile.terrain1 = 0xB
-                        new_tile.terrain2 = 0xB
+                    try:
+                        new_layout = tile_symmetries[new_tile.layout][symmetry_type]
+                        new_tile.layout = new_layout[pos] if symmetry_type == 'rotation' else new_layout[symmetry_axis]
+                    except Exception:
+                        print(f'missing tile rotation info for ({se}, {sw})')
+                        
     
     ftrs_iter = tgm.chunks['FTRS'].features.copy()
     for f in ftrs_iter:

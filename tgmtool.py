@@ -43,7 +43,7 @@ def update(args: argparse.Namespace):
 def mirror(args: argparse.Namespace):
     source_path = Path(args.source).resolve()
     if source_path.suffix.upper() != '.TGM':
-        print(f'tgmtool.py(45) {source_path.name} is not a .TGM file.')
+        print(f'{source_path.name} is not a .TGM file.')
         raise SystemExit()
     map_file = tgmlib.tgmFile(source_path)
     map_file.load()
@@ -73,9 +73,9 @@ mirror_parse = sub_parsers.add_parser("mirror")
 mirror_parse.set_defaults(func=mirror)
 mirror_parse.add_argument('source', type=str, help='path to target TGM file')
 mirror_parse.add_argument('sections', type=int, choices=(2,4,), help='number of sections the map will be divided into when mirroring')
-mirror_parse.add_argument('source_region', type=str, help='which region/section will be mirrored into the other regions')
-mirror_parse.add_argument('-o', '--output', type=str, help='path to save source file')
-mirror_parse.add_argument('-t', '--symmetry-type', type=str, default='rotation', choices=('rotation', 'reflection',), help='the type of symmetry. use reflection for a mirror image, reflection for a filpped mirror image')
+mirror_parse.add_argument('source_region', type=str, choices=('north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west',), help='which region/section will be mirrored into the other regions.')
+mirror_parse.add_argument('-o', '--output', type=str, help='path to save mirrored TGM file')
+mirror_parse.add_argument('-s', '--symmetry-type', type=str, default='rotation', choices=('rotation', 'reflection',), help='the type of symmetry. use reflection for a mirror image, rotation for radial symmetry')
 
 
 if __name__ == '__main__':
