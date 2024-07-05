@@ -62,10 +62,12 @@ def update(old_map, ref_map, name_mapping, dest_path):
             name = name_mapping[k]
         else:
             name = k
-            
-        new_index = ref_map.chunks['TYPE'].by_name[name]['index']
-        old_index = v['index']
-        index_mapping[old_index] = new_index
+        try:
+            new_index = ref_map.chunks['TYPE'].by_name[name]['index']
+            old_index = v['index']
+            index_mapping[old_index] = new_index
+        except KeyError:
+            print(f'{name} is not present in type_ref, setting index to 0\nconsider adding {name} to the name mapping')
     
     for f in old_map.chunks['FTRS'].features:
         f.header.index = index_mapping[f.header.index] 
@@ -100,7 +102,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
     hero_name_re = re.compile(r"([a-zA-Z012_ ']+?)(Enlightened|Restored|Ascended){0,1}$")
     i = 0
     for obj in old_map.chunks['OBJS'].objs:
-        #print(f'obj id:{i} edtr_id:{obj.header.editor_id} ix:{obj.header.index} -> {index_mapping[obj.header.index]}')
+        #print(f'obj id:{i} edtr_id:{obj.header.editor_id} ix:{obj.header.index}')
         i += 1
         obj.header.index = index_mapping[obj.header.index]
         match obj.header.obj_class:
