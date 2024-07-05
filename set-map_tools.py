@@ -80,10 +80,21 @@ hero_list = load_heroes()
 
 players = [
     Player(color='green',player_name='Joe',kingdom_name='Joeland',starting_gold=767,faction='royalist'),
-    Player(color='cyan',player_name='Albert',kingdom_name='Albion',starting_gold=676,faction='nationalist'),
+    Player(color='red',player_name='Albert',kingdom_name='Albion',starting_gold=676,faction='council'),
     ]
 
+# check which kingdoms are currently in use
+# for later object replacement
+index = 0
+active_kingdoms = []
+for k in tgm.chunks['EDTR'].kingdoms:
+    if k.is_active:
+        active_kingdoms.append(index)
+    k.is_active = False
+    index += 1
 
+# holds a mapping between existing player numbers and new ones
+player_mapping = {}
 
 for p in players:
     tgm.chunks['EDTR'].kingdoms[color_mapping[p.color]].is_active = True
@@ -97,6 +108,28 @@ for p in players:
         tgm.chunks['HROS'].heroes[name]['experience'] = 0
         tgm.chunks['HROS'].heroes[name]['awakened'] = 0
         tgm.chunks['HROS'].heroes[name]['player_id'] = color_mapping[p.color]
+    
+    pick = random.randint(0, len(active_kingdoms)-1)
+    player_mapping[active_kingdoms.pop(pick)] = p
+    
 
         
-        
+for i, o in enumerate(tgm.chunks['OBJS'].objs):
+    try:
+        if o.header.player != 8:
+            new_player = player_mapping[o.header.player]
+            o.header.player = color_mapping[new_player.color]
+            #if the name starts with a faction, take correct faction, append to building type, lookup index
+            name = o.TYPE_ref.by_index[o.header.index]['name'].split('_')
+            # If obj type-name starts with a faction name
+            if name[0].lower() in faction_mapping.keys():
+                new_name = '_'.join([new_player.faction.upper()] + name[1:])
+                o.header.index = o.TYPE_ref.by_name[new_name]['index']
+    except KeyError:
+        tgm.chunks['OBJS'].objs[i] = None
+
+tgm.chunks['OBJS'].objs[:] = (o for o in tgm.chunks['OBJS'].objs if o is not None)
+
+print(tgm.chunks['OBJS'].objs)   
+
+tgm.write('C:/Program Files (x86)/Steam/steamapps/common/Kohan Ahrimans Gift/Maps/set-map_test.tgm')     

@@ -516,6 +516,9 @@ class MapObj:
     
     def pack(self):
         return self.header.pack()
+    
+    def __repr__(self):
+        return f'{self.TYPE_ref.by_index[self.header.index]["name"]} @ ({self.header.hotspot_se}),({self.header.hotspot_sw},) player {self.header.player}\n'
 
 
 class Building(MapObj):
@@ -790,7 +793,7 @@ class Building(MapObj):
                                     self.base_wood_production,
                                     self.base_iron_production,
                                     self.base_mana_production,)
-        return data
+        return data        
 
 
 class Company(MapObj):  
