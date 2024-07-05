@@ -6,6 +6,8 @@ Created on Fri Jul  5 13:19:01 2024
 """
 import tgmlib
 import random
+from configparser import ConfigParser
+from pathlib import Path
 
 # things that need to be adjusted for each kingdom:
 #  - Whether or not it is being used
@@ -99,7 +101,7 @@ player_mapping = {}
 for p in players:
     tgm.chunks['EDTR'].kingdoms[color_mapping[p.color]].is_active = True
     tgm.chunks['EDTR'].kingdoms[color_mapping[p.color]].name = p.kingdom_name
-    tgm.chunks['EDTR'].players[color_mapping[p.color]]['name'] = p.player_name
+    #tgm.chunks['EDTR'].players[color_mapping[p.color]]['name'] = p.player_name
     tgm.chunks['EDTR'].players[color_mapping[p.color]]['faction'] = faction_mapping[p.faction]
     
     heroes = choose_heroes(p.faction.upper(), number=num_heroes)
@@ -125,6 +127,19 @@ for i, o in enumerate(tgm.chunks['OBJS'].objs):
             if name[0].lower() in faction_mapping.keys():
                 new_name = '_'.join([new_player.faction.upper()] + name[1:])
                 o.header.index = o.TYPE_ref.by_name[new_name]['index']
+                # Fix upgrade index if present
+                if o.upgrade_index != 0xFFFF:
+                    new_upgrade_name = '_'.join([new_player.faction.upper()] + o.TYPE_ref.by_index[o.upgrade_index]['name'].split('_')[1:])
+                    o.upgrade_index = o.TYPE_ref.by_name[new_upgrade_name]['index']
+                # Set HP
+                building_ini = ConfigParser(inline_comment_prefixes=(';',))
+                filepath = Path(f'./Data/ObjectData/Buildings/{new_name}.INI').resolve()
+                if not filepath.exists():
+                    print(f'{filepath} does not exist!')
+                    raise SystemExit()
+                building_ini.read(filepath)
+                print(f'reading {filepath}')
+                o.current_hp, o.max_hp = (float(building_ini['ObjectData']['MaxHitPoints']),)*2
     except KeyError:
         tgm.chunks['OBJS'].objs[i] = None
 

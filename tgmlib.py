@@ -103,6 +103,9 @@ unit_mods_default = {
 	'CAUSE_MAGIC_DAMAGE': [0, 'add'],
     }
 
+def fix_encoding(text):
+    return (text if type(text) is bytes else text.encode('ascii'))
+
 
 class tgmFile:
     """
@@ -133,19 +136,33 @@ class tgmFile:
                 'easy': {'name_len': 0, 'name': ''},
                 'medium': {'name_len': 0, 'name': ''},
                 'hard': {'name_len': 0, 'name': ''},
-                })     
+                })
+            
+            def pack(self):
+                data = b''
+                data += struct.pack(f'<IB{len(self.name)}s4sI',
+                                    int(self.is_active),
+                                    len(self.name),
+                                    fix_encoding(self.name),
+                                    self.unknown,
+                                    self.team,)
+                for sai in self.sai.values():
+                    data += struct.pack(f'<B{len(sai["name"])}s',
+                                        len(sai['name']),
+                                        fix_encoding(sai['name']),)
+                return data
+                
         
         
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[2].data_offset)
                 # Skips unknown bytes
-                (self.unknown1,) = struct.unpack('4s', in_fh.read(4))
-                (self.name_len,) = struct.unpack('B', in_fh.read(1))
+                (self.unknown1,
+                 self.name_len,) = struct.unpack('4sB', in_fh.read(5))
                 (self.map_name,) = struct.unpack(f'{self.name_len}s', in_fh.read(self.name_len))
                 (self.desc_len,) = struct.unpack('B', in_fh.read(1))
                 (self.map_description,) = struct.unpack(f'{self.desc_len}s', in_fh.read(self.desc_len))
-                # Skips unknown bytes
                 (self.size_se,
                  self.size_sw,
                  self.deathmatch_teams,
@@ -191,9 +208,81 @@ class tgmFile:
                     new_player['faction'],
                     new_player['team'],
                     new_player['unknown2'],) = struct.unpack('4sII4s', in_fh.read(16))
-                    
                     self.players.append(new_player)
-            return
+                
+                (self.unknown3,
+                 self.starting_gold,
+                 self.unknown4,
+                 use_politics,
+                 self.unknown5,
+                 allow_settlements,
+                 allow_outposts,
+                 self.max_companies,
+                 self.max_settlements,
+                 self.max_outposts,
+                 self.unknown6,
+                 self.allied_victory,
+                 self.unknown7,) = struct.unpack('=12sfIIB5I28sI50s', in_fh.read(127))
+                self.use_politics = bool(use_politics)
+                self.allow_settlements = bool(allow_settlements)
+                self.allow_outposts = bool(allow_outposts)
+                
+            
+        def pack(self):
+            data = b''
+            data += struct.pack(f'<4sB{len(self.map_name)}sB{len(self.map_description)}sIII8xI4xI4x',
+                                self.unknown1,
+                                len(self.map_name),
+                                fix_encoding(self.map_name),
+                                len(self.map_description),
+                                fix_encoding(self.map_description),
+                                self.size_se,
+                                self.size_sw,
+                                self.deathmatch_teams,
+                                self.custom_play_kingdoms,
+                                self.scenario_deathmatch_kingdoms,)
+            
+            for k in self.kingdoms:
+                data += k.pack()
+            
+            for t in self.teams:
+                data += struct.pack(f'<4sB{len(t["name"])}s12s',
+                                   t['unknown0'],
+                                   len(t['name']),
+                                   fix_encoding(t['name']),
+                                   t['unknown1'],)
+            
+            data += struct.pack('<84s', self.unknown2,)
+            
+            for p in self.players:
+                data += struct.pack(f'<B{len(p["name"])}s4sII4s',
+                                    len(p['name']),
+                                    fix_encoding(p['name']),
+                                    p['unknown1'],
+                                    p['faction'],
+                                    p['team'],
+                                    p['unknown2'],)
+                
+            data += struct.pack('<12sfIIB5I28sI50s',
+                                self.unknown3,
+                                self.starting_gold,
+                                self.unknown4,
+                                int(self.use_politics),
+                                self.unknown5,
+                                int(self.allow_settlements),
+                                int(self.allow_outposts),
+                                self.max_companies,
+                                self.max_settlements,
+                                self.max_outposts,
+                                self.unknown6,
+                                self.allied_victory,
+                                self.unknown7,)   
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'EDTR', len(data)) + data
+            return data  
+            
+            
     class MgrdChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file, EDTR):
             with open(filename, "rb") as in_fh:
