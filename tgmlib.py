@@ -6,6 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from pprint import pprint
 from copy import deepcopy
+from bitarray import bitarray, util
 
 comp_mods_lookup = {
 	0x24: 'RESUPPLY_RATE_BONUS',
@@ -158,7 +159,7 @@ class tgmFile:
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[2].data_offset)
                 # Skips unknown bytes
-                (self.unknown1,
+                (self.unknown0,
                  self.name_len,) = struct.unpack('4sB', in_fh.read(5))
                 (self.map_name,) = struct.unpack(f'{self.name_len}s', in_fh.read(self.name_len))
                 (self.desc_len,) = struct.unpack('B', in_fh.read(1))
@@ -166,8 +167,16 @@ class tgmFile:
                 (self.size_se,
                  self.size_sw,
                  self.deathmatch_teams,
-                 self.custom_play_kingdoms,
-                 self.scenario_deathmatch_kingdoms,) = struct.unpack('III8xI4xI4x', in_fh.read(36))
+                 self.deathmatch_kingdoms,
+                 deathmatch_players,
+                 self.custom_kingdoms,
+                 custom_players,
+                 self.scenario_kingdoms,
+                 scenario_players,) = struct.unpack('=9I', in_fh.read(36))
+                
+                self.deathmatch_players = util.int2ba(deathmatch_players, endian='little')
+                self.custom_players = util.int2ba(custom_players, endian='little')
+                self.scenario_players = util.int2ba(scenario_players, endian='little')
                 
                 self.kingdoms = []
                 for i in range(0,8):
@@ -230,8 +239,8 @@ class tgmFile:
             
         def pack(self):
             data = b''
-            data += struct.pack(f'<4sB{len(self.map_name)}sB{len(self.map_description)}sIII8xI4xI4x',
-                                self.unknown1,
+            data += struct.pack(f'<4sB{len(self.map_name)}sB{len(self.map_description)}s9I',
+                                self.unknown0,
                                 len(self.map_name),
                                 fix_encoding(self.map_name),
                                 len(self.map_description),
@@ -239,8 +248,12 @@ class tgmFile:
                                 self.size_se,
                                 self.size_sw,
                                 self.deathmatch_teams,
-                                self.custom_play_kingdoms,
-                                self.scenario_deathmatch_kingdoms,)
+                                self.deathmatch_kingdoms,
+                                util.ba2int(self.deathmatch_players),
+                                self.custom_kingdoms,
+                                util.ba2int(self.custom_players),
+                                self.scenario_kingdoms,
+                                util.ba2int(self.scenario_players),)
             
             for k in self.kingdoms:
                 data += k.pack()

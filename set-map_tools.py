@@ -97,6 +97,13 @@ for i, k in enumerate(tgm.chunks['EDTR'].kingdoms):
     k.is_active = False
     tgm.chunks['PLRS'].players[i].is_active = False
 
+tgm.chunks['EDTR'].deathmatch_kingdoms = num_players
+tgm.chunks['EDTR'].custom_kingdoms = num_players
+tgm.chunks['EDTR'].scenario_kingdoms = num_players
+tgm.chunks['EDTR'].deathmatch_players.setall(False)
+tgm.chunks['EDTR'].custom_players.setall(False)
+tgm.chunks['EDTR'].scenario_players.setall(False)
+
 # holds a mapping between existing player numbers and new ones
 player_mapping = {}
 
@@ -105,6 +112,9 @@ for p in players:
     tgm.chunks['EDTR'].kingdoms[p.playerNum()].name = p.kingdom_name
     #tgm.chunks['EDTR'].players[color_mapping[p.color]]['name'] = p.player_name
     tgm.chunks['EDTR'].players[p.playerNum()]['faction'] = faction_mapping[p.faction]
+    tgm.chunks['EDTR'].deathmatch_players[p.playerNum()] = True
+    tgm.chunks['EDTR'].custom_players[p.playerNum()] = True
+    tgm.chunks['EDTR'].scenario_players[p.playerNum()] = True
     
     tgm.chunks['PLRS'].players[p.playerNum()].faction = faction_mapping[p.faction]
     tgm.chunks['PLRS'].players[p.playerNum()].starting_gold = p.starting_gold
@@ -153,4 +163,4 @@ tgm.chunks['OBJS'].objs[:] = (o for o in tgm.chunks['OBJS'].objs if o is not Non
 
 print(tgm.chunks['OBJS'].objs)   
 
-tgm.write('C:/Program Files (x86)/Steam/steamapps/common/Kohan Ahrimans Gift/Maps/set-map_test.tgm')     
+tgm.write('C:/Program Files (x86)/Steam/steamapps/common/Kohan Ahrimans Gift/Maps/set-map_test2.tgm')     
