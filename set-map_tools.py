@@ -52,6 +52,9 @@ class Player:
         self.player_name = player_name
         self.kingdom_name = kingdom_name
         self.starting_gold = starting_gold
+    
+    def playerNum(self):
+        return color_mapping[self.color]
 
 def load_heroes():
     heroes = {
@@ -82,27 +85,30 @@ hero_list = load_heroes()
 
 players = [
     Player(color='green',player_name='Joe',kingdom_name='Joeland',starting_gold=767,faction='royalist'),
-    Player(color='red',player_name='Albert',kingdom_name='Albion',starting_gold=676,faction='council'),
+    Player(color='red',player_name='Albert',kingdom_name='Albion',starting_gold=676,faction='nationalist'),
     ]
 
 # check which kingdoms are currently in use
 # for later object replacement
-index = 0
 active_kingdoms = []
-for k in tgm.chunks['EDTR'].kingdoms:
+for i, k in enumerate(tgm.chunks['EDTR'].kingdoms):
     if k.is_active:
-        active_kingdoms.append(index)
+        active_kingdoms.append(i)
     k.is_active = False
-    index += 1
+    tgm.chunks['PLRS'].players[i].is_active = False
 
 # holds a mapping between existing player numbers and new ones
 player_mapping = {}
 
 for p in players:
-    tgm.chunks['EDTR'].kingdoms[color_mapping[p.color]].is_active = True
-    tgm.chunks['EDTR'].kingdoms[color_mapping[p.color]].name = p.kingdom_name
+    tgm.chunks['EDTR'].kingdoms[p.playerNum()].is_active = True
+    tgm.chunks['EDTR'].kingdoms[p.playerNum()].name = p.kingdom_name
     #tgm.chunks['EDTR'].players[color_mapping[p.color]]['name'] = p.player_name
-    tgm.chunks['EDTR'].players[color_mapping[p.color]]['faction'] = faction_mapping[p.faction]
+    tgm.chunks['EDTR'].players[p.playerNum()]['faction'] = faction_mapping[p.faction]
+    
+    tgm.chunks['PLRS'].players[p.playerNum()].faction = faction_mapping[p.faction]
+    tgm.chunks['PLRS'].players[p.playerNum()].starting_gold = p.starting_gold
+    tgm.chunks['PLRS'].players[p.playerNum()].is_active = True
     
     heroes = choose_heroes(p.faction.upper(), number=num_heroes)
     for name in heroes:
@@ -120,7 +126,7 @@ for i, o in enumerate(tgm.chunks['OBJS'].objs):
     try:
         if o.header.player != 8:
             new_player = player_mapping[o.header.player]
-            o.header.player = color_mapping[new_player.color]
+            o.header.player = new_player.playerNum()
             #if the name starts with a faction, take correct faction, append to building type, lookup index
             name = o.TYPE_ref.by_index[o.header.index]['name'].split('_')
             # If obj type-name starts with a faction name

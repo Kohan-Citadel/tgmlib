@@ -490,29 +490,23 @@ class tgmFile:
             return data
     
     class PlrsChunk:
-        
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[15].data_offset)
-                (unknown0,) = struct.unpack('I', in_fh.read(4))
+                (self.unknown0,) = struct.unpack('I', in_fh.read(4))
                 
                 self.players = []
-                for i in range(0, 8):
-                    start_pos = in_fh.tell()
-                    new_player = {}
-                    (new_player['unknown'],
-                     new_player['unknown0'],) = struct.unpack('I8s', in_fh.read(12))
-                    print(f'pos: {in_fh.tell()}')
-                    new_player['name'] = struct.unpack('=15s', in_fh.read(15))[0].rstrip(b'\x00').decode('utf-8')
-                    print(new_player['name'])
-                    (new_player['faction'],
-                     new_player['unknown1'],
-                     new_player['sai_len'],) = struct.unpack('=B12sxxxB', in_fh.read(17))
-                    print(new_player['sai_len'])
-                    (new_player['sai_name'],) = struct.unpack(f'={new_player["sai_len"]}s', in_fh.read(new_player['sai_len']))
-                    in_fh.seek(start_pos+4597)
-                    self.players.append(new_player)
-            return
+                for i in range(0, 9):
+                    self.players.append(Player(in_fh))
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.unknown0,)
+            for p in self.players:
+                data += p.pack()
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'PLRS', len(data)) + data
+            return data
 
     
     class ObjsChunk:
@@ -556,7 +550,7 @@ class tgmFile:
                 self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
                 self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff, self.chunks['TYPE'])
                 self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
-                #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
+                self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
                 self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
     
     def write(self, dest_path):
@@ -577,6 +571,108 @@ class tgmFile:
             out_fp.seek(4)
             out_fp.write(struct.pack('>I', file_size - 12))
 
+class Player:
+    def __init__(self, in_fh,):
+        self.fh = in_fh
+        start_pos = self.fh.tell()
+        #print(f'reading player {i} @ {self.fh.tell()}')
+        (self.unknown0,
+         self.size0,
+         self.size1,) = struct.unpack('3I', self.fh.read(12))
+        #print(f'pos: {in_fh.tell()}')
+        self.name = struct.unpack('=15s', self.fh.read(15))[0].split(b'\x00')[0].decode('ascii')
+        print(f"   name {self.name}")
+        (self.faction,
+         self.unknown1,
+         self.starting_gold,
+         is_active,
+         self.sai_len,) = struct.unpack('=IffIb', self.fh.read(17))
+        self.is_active = bool(is_active)
+        
+        (self.sai_name,) = struct.unpack(f'={self.sai_len}s', self.fh.read(self.sai_len))
+        
+        size_factor = -20 if self.size0 == 0x12 else 0
+        if self.name == "Independent":
+            data_len = start_pos + 4592 - in_fh.tell() + size_factor
+            (self.data0,) = struct.unpack(f'={data_len}s',self.fh.read(data_len))
+        else:
+            self.economy = {}
+            (self.economy['gold'],
+             self.economy['unknown1'],
+             self.economy['stone'],
+             self.economy['unknown2'],
+             self.economy['wood'],
+             self.economy['unknown3'],
+             self.economy['iron'],
+             self.economy['unknown4'],
+             self.economy['mana'],
+             self.economy['unknown5'],) = struct.unpack('=10f', self.fh.read(40))
+            
+            (self.unknown1,) = struct.unpack('=B', self.fh.read(1))
+            
+            self.political_relations = {}
+            (self.political_relations['player1'],
+             self.political_relations['player2'],
+             self.political_relations['player3'],
+             self.political_relations['player4'],
+             self.political_relations['player5'],
+             self.political_relations['player6'],
+             self.political_relations['player7'],
+             self.political_relations['player8'],) = struct.unpack('=8f', self.fh.read(32))
+            
+            (self.data1,
+             self.start_pos_se,
+             self.start_pos_sw,
+             self.unknown2,
+             self.allies,
+             self.lock_politics,
+             self.data2,) = struct.unpack(f'=4192sff12sBxxxBxxx{253 + size_factor}s', self.fh.read(4473 + size_factor))
+        
+    def pack(self):
+        data = b''
+        data += struct.pack(f'<3I15sIffIB{len(self.sai_name)}s',
+                            self.unknown0,
+                            self.size0,
+                            self.size1,
+                            self.name.encode('ascii'),
+                            self.faction,
+                            self.unknown1,
+                            self.starting_gold,
+                            int(self.is_active),
+                            len(self.sai_name),
+                            self.sai_name,)
+        
+        if self.name == "Independent":
+            data += struct.pack(f'<{len(self.data0)}s', self.data0)
+        else:
+            data += struct.pack(f'<10fB8f4192sff12sBxxxBxxx{len(self.data2)}s',
+                                self.economy['gold'],
+                                self.economy['unknown1'],
+                                self.economy['stone'],
+                                self.economy['unknown2'],
+                                self.economy['wood'],
+                                self.economy['unknown3'],
+                                self.economy['iron'],
+                                self.economy['unknown4'],
+                                self.economy['mana'],
+                                self.economy['unknown5'],
+                                self.unknown1,
+                                self.political_relations['player1'],
+                                self.political_relations['player2'],
+                                self.political_relations['player3'],
+                                self.political_relations['player4'],
+                                self.political_relations['player5'],
+                                self.political_relations['player6'],
+                                self.political_relations['player7'],
+                                self.political_relations['player8'],
+                                self.data1,
+                                self.start_pos_se,
+                                self.start_pos_sw,
+                                self.unknown2,
+                                self.allies,
+                                self.lock_politics,
+                                self.data2,)
+        return data
 
 class MapObj:
     def __init__(self, in_fh, TYPE):
