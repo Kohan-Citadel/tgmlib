@@ -167,16 +167,21 @@ class tgmFile:
                 (self.size_se,
                  self.size_sw,
                  self.deathmatch_teams,
-                 self.deathmatch_kingdoms,
-                 deathmatch_players,
-                 self.custom_kingdoms,
-                 custom_players,
-                 self.scenario_kingdoms,
-                 scenario_players,) = struct.unpack('=9I', in_fh.read(36))
-                
-                self.deathmatch_players = util.int2ba(deathmatch_players, endian='little')
-                self.custom_players = util.int2ba(custom_players, endian='little')
-                self.scenario_players = util.int2ba(scenario_players, endian='little')
+                 self.deathmatch_kingdoms,) = struct.unpack('=4I', in_fh.read(16))
+                self.deathmatch_players = bitarray(0, endian='little')
+                self.deathmatch_players.frombytes(in_fh.read(4),)
+                (self.custom_kingdoms,) = struct.unpack('=I', in_fh.read(4))
+                self.custom_players = bitarray(0, endian='little')
+                self.custom_players.frombytes(in_fh.read(4),)
+                (self.scenario_kingdoms,) = struct.unpack('=I', in_fh.read(4))
+                self.scenario_players = bitarray(0, endian='little')
+                self.scenario_players.frombytes(in_fh.read(4),)
+# =============================================================================
+#                 
+#                 self.deathmatch_players = util.int2ba(deathmatch_players, endian='little')
+#                 self.custom_players = util.int2ba(custom_players, endian='little')
+#                 self.scenario_players = util.int2ba(scenario_players, endian='little')
+# =============================================================================
                 
                 self.kingdoms = []
                 for i in range(0,8):
@@ -369,6 +374,10 @@ class tgmFile:
                 (self.count,) = struct.unpack('=I', in_fh.read(4))
                 self.sizes = []
                 self.sizes.extend(struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
+        
+        def generate(self, FTRS):
+            self.sizes = [len(f.pack()) for f in FTRS.features if f.header.index != 0xFFFF]
+            self.count = len(self.sizes)
         
         def pack(self):
             data = struct.pack(f'<{self.count+1}I', self.count, *self.sizes)
@@ -588,6 +597,7 @@ class Player:
     def __init__(self, in_fh,):
         self.fh = in_fh
         start_pos = self.fh.tell()
+        self.start = self.fh.tell()
         #print(f'reading player {i} @ {self.fh.tell()}')
         (self.unknown0,
          self.size0,
@@ -599,7 +609,7 @@ class Player:
          self.unknown1,
          self.starting_gold,
          is_active,
-         self.sai_len,) = struct.unpack('=IffIb', self.fh.read(17))
+         self.sai_len,) = struct.unpack('=IffIB', self.fh.read(17))
         self.is_active = bool(is_active)
         
         (self.sai_name,) = struct.unpack(f'={self.sai_len}s', self.fh.read(self.sai_len))
@@ -621,7 +631,7 @@ class Player:
              self.economy['mana'],
              self.economy['unknown5'],) = struct.unpack('=10f', self.fh.read(40))
             
-            (self.unknown1,) = struct.unpack('=B', self.fh.read(1))
+            (self.unknown2,) = struct.unpack('=4s', self.fh.read(4))
             
             self.political_relations = {}
             (self.political_relations['player1'],
@@ -636,10 +646,10 @@ class Player:
             (self.data1,
              self.start_pos_se,
              self.start_pos_sw,
-             self.unknown2,
+             self.unknown3,
              self.allies,
              self.lock_politics,
-             self.data2,) = struct.unpack(f'=4192sff12sBxxxBxxx{253 + size_factor}s', self.fh.read(4473 + size_factor))
+             self.data2,) = struct.unpack(f'=4192sff12sBxxxBxxx{250 + size_factor}s', self.fh.read(4470 + size_factor))
         
     def pack(self):
         data = b''
@@ -658,7 +668,8 @@ class Player:
         if self.name == "Independent":
             data += struct.pack(f'<{len(self.data0)}s', self.data0)
         else:
-            data += struct.pack(f'<10fB8f4192sff12sBxxxBxxx{len(self.data2)}s',
+            print(f'start_pos : ({self.start_pos_se}, {self.start_pos_sw})')
+            data += struct.pack(f'<10f4s8f4192sff12sBxxxBxxx{len(self.data2)}s',
                                 self.economy['gold'],
                                 self.economy['unknown1'],
                                 self.economy['stone'],
@@ -669,7 +680,7 @@ class Player:
                                 self.economy['unknown4'],
                                 self.economy['mana'],
                                 self.economy['unknown5'],
-                                self.unknown1,
+                                self.unknown2,
                                 self.political_relations['player1'],
                                 self.political_relations['player2'],
                                 self.political_relations['player3'],
@@ -681,7 +692,7 @@ class Player:
                                 self.data1,
                                 self.start_pos_se,
                                 self.start_pos_sw,
-                                self.unknown2,
+                                self.unknown3,
                                 self.allies,
                                 self.lock_politics,
                                 self.data2,)
