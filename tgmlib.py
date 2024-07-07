@@ -176,12 +176,6 @@ class tgmFile:
                 (self.scenario_kingdoms,) = struct.unpack('=I', in_fh.read(4))
                 self.scenario_players = bitarray(0, endian='little')
                 self.scenario_players.frombytes(in_fh.read(4),)
-# =============================================================================
-#                 
-#                 self.deathmatch_players = util.int2ba(deathmatch_players, endian='little')
-#                 self.custom_players = util.int2ba(custom_players, endian='little')
-#                 self.scenario_players = util.int2ba(scenario_players, endian='little')
-# =============================================================================
                 
                 self.kingdoms = []
                 for i in range(0,8):

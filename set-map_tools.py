@@ -279,6 +279,14 @@ def updateObjects(tgm, player_mapping):
                     building_ini.read(filepath)
                     print(f'reading {filepath}')
                     o.current_hp, o.max_hp = (float(building_ini['ObjectData']['MaxHitPoints']),)*2
+                    o.militia.supply_zone = float(building_ini['BaseData']['SupplyRange'])
+                    o.militia.guard_zone = float(building_ini['BaseData']['ControlRange'])
+                    o.militia.max = float(building_ini['BaseData']['MaxMilitia'])
+                    o.militia.current = o.militia.max/2
+                    o.militia.regen_rate = float(building_ini['BaseData']['MilitiaGrowth'])
+                    o.militia.company_size = int(building_ini['BaseData']['CompanySize'])
+                    o.militia.front_index = o.TYPE_ref.by_name[building_ini['BaseData']['MilitiaType'].upper()]['index']
+                    o.militia.support_index = o.militia.front_index
             except KeyError:
                 tgm.chunks['OBJS'].objs[i] = None
     
