@@ -10,6 +10,7 @@ from configparser import ConfigParser
 from pathlib import Path
 import sys
 from PyQt5 import QtCore, QtWidgets, QtGui
+import time
 
 # things that need to be adjusted for each kingdom:
 #  - Whether or not it is being used
@@ -21,12 +22,9 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 #  - Starting Gold
 #  - Starting outpost
 
-
 num_players = 2
 num_heroes = 4
 starting_outpost = False
-
-
 
 color_mapping = {
     'red': 0,
@@ -57,11 +55,13 @@ class Player:
     def playerNum(self):
         return color_mapping[self.color]
 
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self,):
-        super().__init__()
-            
-        self.setWindowTitle("Kohan Duels Map Randomizer")
+class Widget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(Widget, self).__init__(parent)
+        
+        self.tgm_loaded = False
+        
+        #self.setWindowTitle("Kohan Duels Map Randomizer")
         
         self.player1 = PlayerSettings()
         self.player2 = PlayerSettings()
@@ -69,44 +69,49 @@ class MainWindow(QtWidgets.QMainWindow):
         self.map_settings.select_map.clicked.connect(self.openFileNameDialog)
         self.map_settings.generate_map.clicked.connect(self.generateMap)
         
-        layout = QtWidgets.QHBoxLayout()
-        layout.addLayout(self.player1)
-        layout.addLayout(self.player2)
-        layout.addLayout(self.map_settings)
-    
-        container = QtWidgets.QWidget()
-        container.setLayout(layout)
+        settings = QtWidgets.QHBoxLayout()
+        settings.addLayout(self.player1)
+        settings.addLayout(self.player2)
+        settings.addLayout(self.map_settings)
         
-        self.setCentralWidget(container)
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(settings)
+        back_button = QtWidgets.QPushButton('Back to Menu')
+        back_button.clicked.connect(lambda: self.parent().parent().switchWidget('homepage'))
+        layout.addWidget(back_button)
+        self.setLayout(layout)
 
     def openFileNameDialog(self):
         options = QtWidgets.QFileDialog.Options()
-        options |= QtWidgets.QFileDialog.DontUseNativeDialog
         self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
-                                                            "QFileDialog.getOpenFileName()",
-                                                            "",
+                                                            "Select a Kohan Duels map",
+                                                            r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
                                                             "Kohan Maps (*.tgm)",
                                                             options=options)
         if self.filename:
             self.filename = Path(self.filename)
-            print(self.filename)
             self.loadTGM()
+            print(self.filename)
     
     def loadTGM(self):
         self.tgm = tgmlib.tgmFile(self.filename)
         self.tgm.load()
         self.map_settings.select_map.setText(self.filename.stem)
+        self.tgm_loaded = True
     
     def generateMap(self):
+        if not self.tgm_loaded:
+            self.loadTGM()
+        self.tgm_loaded = False
         players = [self.player1.getSettings(), self.player2.getSettings()]
         for p in players:
             p.starting_gold = self.map_settings.starting_gold.value()
         kingdoms = getActiveKingdoms(self.tgm)
         player_mapping = setPlayerData(self.tgm, players, kingdoms)
-        print(player_mapping)
         updateObjects(self.tgm, player_mapping)
         updateFeatures(self.tgm, player_mapping)
         outfile = self.filename.parent/'RandomizedKDMaps'/(self.filename.stem+f'-{players[0].player_name}vs{players[1].player_name}.tgm')
+        print(f'saving map to {outfile}')
         outfile.parent.mkdir(exist_ok=True, parents=True)
         self.tgm.write(outfile)
 
@@ -190,7 +195,7 @@ def load_heroes():
         'ROYALIST':     [],
     }
     
-    with open('data/heroes.csv', 'r') as hero_list:
+    with open(tgmlib.resolve_path('./data/heroes.csv'), 'r') as hero_list:
         while True:
             line = hero_list.readline()
             if line == '':
@@ -272,7 +277,7 @@ def updateObjects(tgm, player_mapping):
                         o.upgrade_index = o.TYPE_ref.by_name[new_upgrade_name]['index']
                     # Set HP
                     building_ini = ConfigParser(inline_comment_prefixes=(';',))
-                    filepath = Path(f'./Data/ObjectData/Buildings/{new_name}.INI').resolve()
+                    filepath = tgmlib.resolve_path(f'./Data/ObjectData/Buildings/{new_name}.INI')
                     if not filepath.exists():
                         print(f'{filepath} does not exist!')
                         raise SystemExit()
@@ -310,20 +315,3 @@ def updateFeatures(tgm, player_mapping):
     # creates new FIDX after editing FTRS
     tgm.chunks['FIDX'].generate(tgm.chunks['FTRS'])
     return
-
-app = QtWidgets.QApplication(sys.argv)
-window = MainWindow()
-window.show()
-
-app.exec()
-
-# =============================================================================
-# from bitarray import bitarray
-# #tgm.write('C:/Program Files (x86)/Steam/steamapps/common/Kohan Ahrimans Gift/Maps/set-map_test2.tgm')     
-# with open('qtm.tgm', 'rb') as in_fh:
-#     custom_players = bitarray(0, endian='little')
-#     print(custom_players)
-#     custom_players.frombytes(in_fh.read(1),)
-#     print(custom_players)
-#     print(in_fh.read(1))
-# =============================================================================

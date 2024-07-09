@@ -1,7 +1,118 @@
 import tgmlib
-from maplib import Position as P
 from copy import deepcopy
 import math
+from PyQt5 import QtCore, QtWidgets, QtGui
+from pathlib import Path
+
+debug = False
+
+class P:
+    def __init__(self, se: float=0, sw: float=0):
+        self.se = se
+        self.sw = sw
+    
+    def set(self, se: float=0, sw: float=0):
+        self.se = se
+        self.sw = sw
+    
+    def copy(self):
+        return P(se=self.se, sw=self.sw)
+    
+    def __str__(self):
+        out = f'map coordinates: ({self.se}, {self.sw})'
+        if hasattr(self, 'x'):
+            out += f' pixel coordinate: ({self.x}, {self.y})'
+        return out
+    
+    def __add__(self, other):
+        return P(se=self.se + other.se, sw=self.sw + other.sw)
+    
+    def __sub__(self, other):
+        return P(se=self.se - other.se, sw=self.sw - other.sw)
+
+class Widget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(Widget, self).__init__(parent)
+        
+        self.tgm_loaded = False
+        
+        #self.setWindowTitle("Kohan Duels Map Randomizer")
+        
+        self.mirror_settings = MirrorSettings()
+        self.mirror_settings.select_map.clicked.connect(self.openFileNameDialog)
+        self.mirror_settings.mirror_map.clicked.connect(self.mirrorMap)
+        
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(self.mirror_settings)
+        back_button = QtWidgets.QPushButton('Back to Menu')
+        back_button.clicked.connect(lambda: self.parent().parent().switchWidget('homepage'))
+        layout.addWidget(back_button)
+        self.setLayout(layout)
+
+    def openFileNameDialog(self):
+        options = QtWidgets.QFileDialog.Options()
+        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
+                                                            "Select a Kohan Duels map",
+                                                            r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
+                                                            "Kohan Maps (*.tgm)",
+                                                            options=options)
+        if self.filename:
+            self.filename = Path(self.filename)
+            self.loadTGM()
+            print(self.filename)
+    
+    def loadTGM(self):
+        self.tgm = tgmlib.tgmFile(self.filename)
+        self.tgm.load()
+        self.mirror_settings.select_map.setText(self.filename.stem)
+        self.tgm_loaded = True
+    
+    def mirrorMap(self):
+        if not self.tgm_loaded:
+            self.loadTGM()
+        self.tgm_loaded = False
+        mirror(self.tgm,
+               self.mirror_settings.sections.currentText(),
+               self.mirror_settings.source_region.currentText(),
+               symmetry_type=self.mirror_settings.symmetry.currentText())
+        outfile = self.filename.parent/(self.filename.stem+'-mirrored.tgm')
+        print(f'saving map to {outfile}')
+        outfile.parent.mkdir(exist_ok=True, parents=True)
+        self.tgm.write(outfile)
+
+class MirrorSettings(QtWidgets.QVBoxLayout):
+    def __init__(self,):
+        super().__init__()
+        
+        self.addWidget(QtWidgets.QLabel('Map Settings'))
+        
+        self.select_map = QtWidgets.QPushButton('Select Map')
+        self.addWidget(self.select_map)
+    
+        self.sections = QtWidgets.QComboBox()
+        self.sections.addItems(['Half Map', 'Quarter Map',])
+        l1 = QtWidgets.QHBoxLayout()
+        l1.addWidget(QtWidgets.QLabel('Region Size'))
+        l1.addWidget(self.sections)
+        self.addLayout(l1)
+        
+        self.source_region = QtWidgets.QComboBox()
+        self.source_region.addItems(['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west',])
+        l2 = QtWidgets.QHBoxLayout()
+        l2.addWidget(QtWidgets.QLabel('Region Position'))
+        l2.addWidget(self.source_region)
+        self.addLayout(l2)
+        
+        self.symmetry = QtWidgets.QComboBox()
+        self.symmetry.addItems(['rotation', 'reflection',])
+        l3 = QtWidgets.QHBoxLayout()
+        l3.addWidget(QtWidgets.QLabel('Symmetry Type'))
+        l3.addWidget(self.symmetry)
+        self.addLayout(l3)
+        
+        self.mirror_map = QtWidgets.QPushButton('Mirror Map')
+        self.addWidget(self.mirror_map)
+
 
 tile_symmetries = {
     0x0: {'rotation': (0x0, 0x0, 0x0, 0x0,),
@@ -37,6 +148,9 @@ tile_symmetries = {
     0xF: {'rotation': (0xF, 0xA, 0xF, 0xA,),
           'reflection': {'n/s': 0xF, 'e/w': 0xF, 'ne/sw': 0xA, 'nw/se': 0xA,},},
     }
+
+
+
 
 # from https://stackoverflow.com/a/3838398
 def cross(axis, point, side):
@@ -85,13 +199,10 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     size_se = tgm.chunks['EDTR'].size_se
     size_sw = tgm.chunks['EDTR'].size_sw
     center = P((size_se)/2, (size_sw)/2)
-    
-    # radians between mirroring regions
-    rotational_offset = 2 * math.pi / sections
-    
+       
     match sections:
-        case 2:
-            #half map
+        case 'Half Map':
+            sections = 2
             symmetry_type = kwargs['symmetry_type']
             match source_region:
                 case 'north'|'south':
@@ -113,8 +224,8 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                 case _:
                     print(f"invalid source region '{source_region}'")
                     raise SystemExit()
-        case 4:
-            # quadrants
+        case 'Quarter Map':
+            sections = 4
             symmetry_type = 'rotation'
             if source_region in ('north', 'east', 'south', 'west'):
                 symmetry_axes = 'diagonal'
@@ -152,6 +263,8 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
             print(f"invalid sections count '{sections}'\nsections must be 2 or 4")
             raise SystemExit()
     
+    # radians between mirroring regions
+    rotational_offset = 2 * math.pi / sections
     
     for se in range(size_se):
         for sw in range(size_sw):

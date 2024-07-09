@@ -115,7 +115,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
                 if hasattr(obj, 'current_hp'):
                     building_ini = ConfigParser(inline_comment_prefixes=(';',))
                     name = ref_map.chunks['TYPE'].by_index[obj.header.index]['name']
-                    filepath = Path(f'./Data/ObjectData/Buildings/{name}.INI').resolve()
+                    filepath = tgmlib.resolve_path(f'./Data/ObjectData/Buildings/{name}.INI')
                     if not filepath.exists():
                         print(f'{filepath} does not exist!')
                         raise SystemExit()
@@ -172,7 +172,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
                                 level = 0
                         
                         #print(f'  {ref_type["name"]} {name} {level}')
-                        filepath = Path(f'./Data/ObjectData/Heroes/{name}.INI').resolve()
+                        filepath = tgmlib.resolve_path(f'./Data/ObjectData/Heroes/{name}.INI')
                         if not filepath.exists():
                             print(f'{filepath} does not exist!')
                             raise SystemExit()
@@ -186,7 +186,7 @@ def update(old_map, ref_map, name_mapping, dest_path):
                      
                     else:
                         name = ref_type['name']
-                        filepath = Path(f'./Data/ObjectData/Units/{name}.INI').resolve()
+                        filepath = tgmlib.resolve_path(f'./Data/ObjectData/Units/{name}.INI')
                         if not filepath.exists():
                             print(f'{filepath} does not exist!')
                             raise SystemExit()
