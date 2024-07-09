@@ -3,6 +3,8 @@ from copy import deepcopy
 import math
 from PyQt5 import QtCore, QtWidgets, QtGui
 from pathlib import Path
+from PIL import Image
+from io import BytesIO
 
 debug = False
 
@@ -14,6 +16,14 @@ class P:
     def set(self, se: float=0, sw: float=0):
         self.se = se
         self.sw = sw
+    
+    def to_pixels(self, size: int):
+        tile_x = 6
+        tile_y = 4
+        axis_angle = math.atan2(tile_y/2, tile_x/2)
+        axis_scaling = (tile_x/2)/math.cos(axis_angle)
+        self.x = round(axis_scaling * (self.se * math.cos(axis_angle) + self.sw * math.cos(math.pi - axis_angle)) + (size/2) * tile_x)
+        self.y = round(axis_scaling * (self.se * math.sin(axis_angle) + self.sw * math.sin(math.pi - axis_angle)))
     
     def copy(self):
         return P(se=self.se, sw=self.sw)
@@ -38,12 +48,19 @@ class Widget(QtWidgets.QWidget):
         
         #self.setWindowTitle("Kohan Duels Map Randomizer")
         
-        self.mirror_settings = MirrorSettings()
+        self.mirror_settings = MirrorSettings(self)
         self.mirror_settings.select_map.clicked.connect(self.openFileNameDialog)
         self.mirror_settings.mirror_map.clicked.connect(self.mirrorMap)
         
+        self.thumbnail = Thumbnail(self)
+        self.mirror_settings.mirror_map.clicked.connect(self.thumbnail.render)
+        
+        interface = QtWidgets.QHBoxLayout()
+        interface.addWidget(self.mirror_settings)
+        interface.addWidget(self.thumbnail)
+        
         layout = QtWidgets.QVBoxLayout()
-        layout.addLayout(self.mirror_settings)
+        layout.addLayout(interface)
         back_button = QtWidgets.QPushButton('Back to Menu')
         back_button.clicked.connect(lambda: self.parent().parent().switchWidget('homepage'))
         layout.addWidget(back_button)
@@ -51,15 +68,19 @@ class Widget(QtWidgets.QWidget):
 
     def openFileNameDialog(self):
         options = QtWidgets.QFileDialog.Options()
-        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
                                                             "Select a Kohan Duels map",
                                                             r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
                                                             "Kohan Maps (*.tgm)",
                                                             options=options)
-        if self.filename:
-            self.filename = Path(self.filename)
-            self.loadTGM()
+        print(f'filename: {filename}')
+        if filename and filename != " ":
+            print('valid file')
+            self.filename = Path(filename)
             print(self.filename)
+            self.loadTGM()
+            self.mirror_settings.mirror_map.setEnabled(True)
+            self.thumbnail.render()
     
     def loadTGM(self):
         self.tgm = tgmlib.tgmFile(self.filename)
@@ -75,44 +96,98 @@ class Widget(QtWidgets.QWidget):
                self.mirror_settings.sections.currentText(),
                self.mirror_settings.source_region.currentText(),
                symmetry_type=self.mirror_settings.symmetry.currentText())
-        outfile = self.filename.parent/(self.filename.stem+'-mirrored.tgm')
-        print(f'saving map to {outfile}')
-        outfile.parent.mkdir(exist_ok=True, parents=True)
-        self.tgm.write(outfile)
+        self.mirror_settings.save_map.setEnabled(True)
+# =============================================================================
+#         outfile = self.filename.parent/(self.filename.stem+'-mirrored.tgm')
+#         print(f'saving map to {outfile}')
+#         outfile.parent.mkdir(exist_ok=True, parents=True)
+#         self.tgm.write(outfile)
+# =============================================================================
 
-class MirrorSettings(QtWidgets.QVBoxLayout):
-    def __init__(self,):
-        super().__init__()
-        
-        self.addWidget(QtWidgets.QLabel('Map Settings'))
+class MirrorSettings(QtWidgets.QWidget):
+    def __init__(self, parent):
+        super(MirrorSettings, self).__init__(parent)
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel('Map Settings'))
         
         self.select_map = QtWidgets.QPushButton('Select Map')
-        self.addWidget(self.select_map)
+        layout.addWidget(self.select_map)
     
         self.sections = QtWidgets.QComboBox()
         self.sections.addItems(['Half Map', 'Quarter Map',])
         l1 = QtWidgets.QHBoxLayout()
         l1.addWidget(QtWidgets.QLabel('Region Size'))
         l1.addWidget(self.sections)
-        self.addLayout(l1)
+        layout.addLayout(l1)
         
         self.source_region = QtWidgets.QComboBox()
         self.source_region.addItems(['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west',])
         l2 = QtWidgets.QHBoxLayout()
         l2.addWidget(QtWidgets.QLabel('Region Position'))
         l2.addWidget(self.source_region)
-        self.addLayout(l2)
+        layout.addLayout(l2)
         
         self.symmetry = QtWidgets.QComboBox()
         self.symmetry.addItems(['rotation', 'reflection',])
         l3 = QtWidgets.QHBoxLayout()
         l3.addWidget(QtWidgets.QLabel('Symmetry Type'))
         l3.addWidget(self.symmetry)
-        self.addLayout(l3)
+        layout.addLayout(l3)
         
         self.mirror_map = QtWidgets.QPushButton('Mirror Map')
-        self.addWidget(self.mirror_map)
+        self.mirror_map.setEnabled(False)
+        layout.addWidget(self.mirror_map)
+        
+        self.save_map = QtWidgets.QPushButton('Save Map')
+        self.save_map.setEnabled(False)
+        layout.addWidget(self.save_map)
+        self.setLayout(layout)
 
+
+class Thumbnail(QtWidgets.QWidget):
+    def __init__(self, parent):
+        super(Thumbnail, self).__init__(parent)
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel('Preview'))
+        self.map_display = QtWidgets.QLabel()
+        layout.addWidget(self.map_display)
+        self.setLayout(layout)
+        
+    def render(self):
+        map_size = self.parent().tgm.chunks['EDTR'].size_se
+        render_x = map_size * 6 #x dim of tile
+        render_y = map_size * 4 #y dim of tile
+        rendered_map = Image.new('RGBA', (render_x, render_y), color=(0,0,0,0))
+        img_cache = {}
+        for c in ('green', 'beige', 'gray', 'brown', 'white', 'blue'):
+            img_cache[c] = Image.open(tgmlib.resolve_path(f'./Data/Tiles/{c}-small.png'))
+        for se, row in enumerate(self.parent().tgm.chunks['MGRD'].tiles):
+            for sw, tile in enumerate(row):
+                match tile.terrain1:
+                    case 0|6|15|4|1|7:
+                        color = 'green'
+                    case 3|5:
+                        color = 'beige'
+                    case 2|14:
+                        color = 'gray'
+                    case 12|10:
+                        color = 'brown'
+                    case 8|9:
+                        color = 'white'
+                    case 11:
+                        color = 'blue'            
+                pos = P(se, sw)
+                pos.to_pixels(map_size)
+                # this should be 50% of the x dimension of the tile
+                hsx, hsy = (3, 0)
+                box = (pos.x - hsx, pos.y - hsy)
+                rendered_map.paste(img_cache[color], box=box, mask=img_cache[color])
+        
+        img_buffer = BytesIO()
+        rendered_map.save(img_buffer, format='PNG')
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(img_buffer.getvalue())
+        self.map_display.setPixmap(pixmap)
 
 tile_symmetries = {
     0x0: {'rotation': (0x0, 0x0, 0x0, 0x0,),
@@ -332,5 +407,3 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
             tgm.chunks['GAME'].ids[o.header.editor_id] = False
             tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
             tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
-    
-
