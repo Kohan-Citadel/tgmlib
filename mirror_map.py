@@ -69,7 +69,7 @@ class Widget(QtWidgets.QWidget):
     def openFileNameDialog(self):
         options = QtWidgets.QFileDialog.Options()
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
-                                                            "Select a Kohan Duels map",
+                                                            "Select a Map to Mirror",
                                                             r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
                                                             "Kohan Maps (*.tgm)",
                                                             options=options)
@@ -108,7 +108,6 @@ class MirrorSettings(QtWidgets.QWidget):
     def __init__(self, parent):
         super(MirrorSettings, self).__init__(parent)
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(QtWidgets.QLabel('Map Settings'))
         
         self.select_map = QtWidgets.QPushButton('Select Map')
         layout.addWidget(self.select_map)

@@ -2,7 +2,159 @@ import tgmlib
 from configparser import ConfigParser
 from pathlib import Path
 import re
+import json
 from copy import deepcopy
+from PyQt5 import QtCore, QtWidgets, QtGui
+
+class Widget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(Widget, self).__init__(parent)
+        self.role = QtCore.Qt.UserRole + 1
+        
+        self.tgm_loaded = False
+        self.tgms = []
+        self.files = []
+        layout = QtWidgets.QVBoxLayout()
+        #self.setWindowTitle("Kohan Duels Map Randomizer")
+        self.select_map = QtWidgets.QPushButton('Select TGM(s)')
+        self.select_map.clicked.connect(self.loadMaps)
+        layout.addWidget(self.select_map)
+        
+        self.ref_map_menu = QtWidgets.QComboBox()
+        for child in tgmlib.resolve_path('./Data/RefMaps').iterdir():
+            self.ref_map_menu.addItem(child.name)
+            self.ref_map_menu.setItemData(self.ref_map_menu.count()-1, child, role=self.role)
+        self.ref_map_browse = QtWidgets.QPushButton('Browse')
+        self.ref_map_browse.setFixedSize(70,22)
+        self.ref_map_browse.clicked.connect(lambda: self.Browse(self.ref_map_menu, "Kohan Maps (*.tgm)"))
+        self.ref_map_menu.currentIndexChanged.connect(lambda i: print(self.ref_map_menu.itemData(i, self.role)))
+        l1 = QtWidgets.QHBoxLayout()
+        l1.addWidget(QtWidgets.QLabel('Reference TGM'), stretch=3)
+        l1.addWidget(self.ref_map_menu, stretch=5)
+        l1.addWidget(self.ref_map_browse)
+        layout.addLayout(l1)
+        
+        self.name_mapping_menu = QtWidgets.QComboBox()
+        for child in tgmlib.resolve_path('./Data/NameMappings').iterdir():
+            self.name_mapping_menu.addItem(child.name)
+            self.name_mapping_menu.setItemData(self.name_mapping_menu.count()-1, child, role=self.role)
+        self.name_mapping_browse = QtWidgets.QPushButton('Browse')
+        self.name_mapping_browse.setFixedSize(70,22)
+        self.name_mapping_browse.clicked.connect(lambda: self.Browse(self.name_mapping_menu, "Type Name Mappings (*.json)"))
+        self.name_mapping_menu.currentIndexChanged.connect(lambda i: print(self.name_mapping_menu.currentData(self.role)))
+        l2 = QtWidgets.QHBoxLayout()
+        l2.addWidget(QtWidgets.QLabel('Type Name Mapping'), stretch=3)
+        l2.addWidget(self.name_mapping_menu, stretch=5)
+        l2.addWidget(self.name_mapping_browse)
+        layout.addLayout(l2)
+        
+        self.update = QtWidgets.QPushButton('Update')
+        self.update.setEnabled(False)
+        self.update.clicked.connect(self.updateMaps)
+        layout.addWidget(self.update)
+
+        back_button = QtWidgets.QPushButton('Back to Menu')
+        back_button.clicked.connect(lambda: self.parent().parent().switchWidget('homepage'))
+        layout.addWidget(back_button)
+        self.setLayout(layout)
+        self.setMaximumSize(400,230)
+
+    def loadMaps(self):
+        files = self.FileDialog(multiple=True,
+                                forOpen=True,
+                                filters=("Kohan Maps (*.tgm)", "All Files (*)",),
+                                isFolder=False)
+        
+        print(f'length of files: {len(files)}')
+        print(f'type of files: {type(files)}')
+        if files:
+            # Clears out old data
+            self.files = []
+            for filename in files:
+                filename = Path(filename)
+                print(filename)
+                self.files.append(filename)
+            
+            self.loadTGMs()
+           
+            self.update.setEnabled(True)
+    
+    def Browse(self, menu, filters):
+        file = self.FileDialog(filters=filters)
+        if file:
+            file = Path(file[0])
+            menu.addItem(file.name)
+            menu.setItemData(menu.count()-1, file, role=self.role)
+            menu.setCurrentIndex(menu.count()-1)
+    
+    def FileDialog(self, directory=r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps", forOpen=True, isFolder=False, multiple=False, filters=("Kohan Maps (*.tgm)",), default_extension=None):
+        print(directory)
+        print(f"isFolder: {isFolder}")
+        options = QtWidgets.QFileDialog.Options()
+        options |= QtWidgets.QFileDialog.DontUseCustomDirectoryIcons
+        dialog = QtWidgets.QFileDialog()
+    
+        dialog.setFilter(dialog.filter() | QtCore.QDir.Hidden)
+    
+        # ARE WE TALKING ABOUT FILES OR FOLDERS
+        if isFolder:
+            dialog.setFileMode(QtWidgets.QFileDialog.Directory)
+            options |= QtWidgets.QFileDialog.ShowDirsOnly
+        else:
+            dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles if multiple else QtWidgets.QFileDialog.AnyFile)
+        # OPENING OR SAVING
+        dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen) if forOpen else dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+    
+        # SET FILTERS, IF SPECIFIED
+        if filters and isFolder is False:
+            if type(filters) is str:
+                filters = (filters,)
+            dialog.setNameFilters(filters)
+        
+        if default_extension:
+            dialog.setDefaultSuffix(default_extension)
+    
+        # SET THE STARTING DIRECTORY
+        if directory:
+            dialog.setDirectory(str(directory))
+    
+        dialog.setOptions(options)    
+        if isFolder:
+            dialog.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+    
+        if dialog.exec() == QtWidgets.QDialog.Accepted:
+            paths = dialog.selectedFiles()  # returns a list
+            return paths
+        else:
+            return None
+    
+    def loadTGMs(self):
+        self.tgms = []
+        for filename in self.files:
+            self.tgms.append(tgmlib.tgmFile(filename))
+            self.tgms[-1].load()
+        self.tgm_loaded = True
+    
+    def updateMaps(self):
+        if not self.tgm_loaded:
+            self.loadTGMs()
+        save_dir = self.FileDialog(directory=self.files[0].parent, forOpen=True, isFolder=True)
+        if save_dir:
+            save_dir = Path(save_dir[0])
+            self.tgm_loaded = False
+            ref_map = tgmlib.tgmFile(self.ref_map_menu.currentData(self.role))
+            ref_map.load()
+            with open(self.name_mapping_menu.currentData(self.role), 'r') as fp:
+                name_mapping = json.load(fp)
+            
+            for tgm in self.tgms:
+                update(tgm,
+                       ref_map,
+                       name_mapping,
+                       save_dir/tgm.filename.name)
+        
+
+
 
 def update(old_map, ref_map, name_mapping, dest_path):
     # stores editor ids of duplicate heroes to be replaced with captain
