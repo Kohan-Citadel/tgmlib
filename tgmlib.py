@@ -2,10 +2,29 @@
 
 import ifflib
 import struct
+import sys
 from pathlib import Path
 from dataclasses import dataclass, field
-from pprint import pprint
 from copy import deepcopy
+from bitarray import bitarray, util
+
+# check if running as a PyInstaller exe
+try:
+    import pyi_splash
+    is_exe = True
+    pyi_splash.close()
+except Exception:
+    is_exe = False
+
+def resolve_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = Path(sys._MEIPASS)
+    except Exception:
+        base_path = Path('.').resolve(strict=True)
+    #print(f'returning {base_path / relative_path}')
+    return (base_path / relative_path).resolve()
 
 comp_mods_lookup = {
 	0x24: 'RESUPPLY_RATE_BONUS',
@@ -103,6 +122,9 @@ unit_mods_default = {
 	'CAUSE_MAGIC_DAMAGE': [0, 'add'],
     }
 
+def fix_encoding(text):
+    return (text if type(text) is bytes else text.encode('latin-1'))
+
 
 class tgmFile:
     """
@@ -133,28 +155,50 @@ class tgmFile:
                 'easy': {'name_len': 0, 'name': ''},
                 'medium': {'name_len': 0, 'name': ''},
                 'hard': {'name_len': 0, 'name': ''},
-                })     
+                })
+            
+            def pack(self):
+                data = b''
+                data += struct.pack(f'<IB{len(self.name)}s4sI',
+                                    int(self.is_active),
+                                    len(self.name),
+                                    fix_encoding(self.name),
+                                    self.unknown,
+                                    self.team,)
+                for sai in self.sai.values():
+                    data += struct.pack(f'<B{len(sai["name"])}s',
+                                        len(sai['name']),
+                                        fix_encoding(sai['name']),)
+                return data
+                
         
         
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[2].data_offset)
+                print(f'reading EDTR chunk at offset {in_fh.tell()}')
                 # Skips unknown bytes
-                (self.unknown1,) = struct.unpack('4s', in_fh.read(4))
-                (self.name_len,) = struct.unpack('B', in_fh.read(1))
+                (self.unknown0,
+                 self.name_len,) = struct.unpack('4sB', in_fh.read(5))
                 (self.map_name,) = struct.unpack(f'{self.name_len}s', in_fh.read(self.name_len))
                 (self.desc_len,) = struct.unpack('B', in_fh.read(1))
                 (self.map_description,) = struct.unpack(f'{self.desc_len}s', in_fh.read(self.desc_len))
-                # Skips unknown bytes
                 (self.size_se,
                  self.size_sw,
                  self.deathmatch_teams,
-                 self.custom_play_kingdoms,
-                 self.scenario_deathmatch_kingdoms,) = struct.unpack('III8xI4xI4x', in_fh.read(36))
+                 self.deathmatch_kingdoms,) = struct.unpack('=4I', in_fh.read(16))
+                self.deathmatch_players = bitarray(0, endian='little')
+                self.deathmatch_players.frombytes(in_fh.read(4),)
+                (self.custom_kingdoms,) = struct.unpack('=I', in_fh.read(4))
+                self.custom_players = bitarray(0, endian='little')
+                self.custom_players.frombytes(in_fh.read(4),)
+                (self.scenario_kingdoms,) = struct.unpack('=I', in_fh.read(4))
+                self.scenario_players = bitarray(0, endian='little')
+                self.scenario_players.frombytes(in_fh.read(4),)
                 
                 self.kingdoms = []
                 for i in range(0,8):
-                    print(f'reading kingdom {i} at {in_fh.tell()}')
+                    #print(f'reading kingdom {i} at {in_fh.tell()}')
                     new_kingdom = self.Kingdom()
                     (new_kingdom.is_active,
                      new_kingdom.name_len,) = struct.unpack('BxxxB', in_fh.read(5))
@@ -163,7 +207,7 @@ class tgmFile:
                      new_kingdom.team,) = struct.unpack('4sI', in_fh.read(8))
                     
                     for k in new_kingdom.sai.keys():
-                        print(f'  reading sai {k} at {in_fh.tell()}')
+                        #print(f'  reading sai {k} at {in_fh.tell()}')
                         (new_kingdom.sai[k]['name_len'],) = struct.unpack('B', in_fh.read(1))
                         (new_kingdom.sai[k]['name'],) = struct.unpack(f"{new_kingdom.sai[k]['name_len']}s", in_fh.read(new_kingdom.sai[k]['name_len']))
                     
@@ -171,7 +215,7 @@ class tgmFile:
                 
                 self.teams = []
                 for i in range(0,4):
-                    print(f'reading team {i} at {in_fh.tell()}')
+                    #print(f'reading team {i} at {in_fh.tell()}')
                     new_team = {}
                     (new_team['unknown0'],
                      new_team['name_len'],) = struct.unpack('4sB', in_fh.read(5))
@@ -181,7 +225,7 @@ class tgmFile:
                 
                 # Skips unknown bytes
                 (self.unknown2,) = struct.unpack('84s', in_fh.read(84))
-                print(f'Reading Players at {in_fh.tell()}')
+                #print(f'Reading Players at {in_fh.tell()}')
                 self.players = []
                 for i in range(0,8):
                     new_player = {}
@@ -191,16 +235,93 @@ class tgmFile:
                     new_player['faction'],
                     new_player['team'],
                     new_player['unknown2'],) = struct.unpack('4sII4s', in_fh.read(16))
-                    
                     self.players.append(new_player)
-            return
+                
+                (self.unknown3,
+                 self.starting_gold,
+                 self.unknown4,
+                 use_politics,
+                 self.unknown5,
+                 allow_settlements,
+                 allow_outposts,
+                 self.max_companies,
+                 self.max_settlements,
+                 self.max_outposts,
+                 self.unknown6,
+                 self.allied_victory,
+                 self.unknown7,) = struct.unpack('=12sfIIB5I28sI50s', in_fh.read(127))
+                self.use_politics = bool(use_politics)
+                self.allow_settlements = bool(allow_settlements)
+                self.allow_outposts = bool(allow_outposts)
+                
+            
+        def pack(self):
+            data = b''
+            data += struct.pack(f'<4sB{len(self.map_name)}sB{len(self.map_description)}s9I',
+                                self.unknown0,
+                                len(self.map_name),
+                                fix_encoding(self.map_name),
+                                len(self.map_description),
+                                fix_encoding(self.map_description),
+                                self.size_se,
+                                self.size_sw,
+                                self.deathmatch_teams,
+                                self.deathmatch_kingdoms,
+                                util.ba2int(self.deathmatch_players),
+                                self.custom_kingdoms,
+                                util.ba2int(self.custom_players),
+                                self.scenario_kingdoms,
+                                util.ba2int(self.scenario_players),)
+            
+            for k in self.kingdoms:
+                data += k.pack()
+            
+            for t in self.teams:
+                data += struct.pack(f'<4sB{len(t["name"])}s12s',
+                                   t['unknown0'],
+                                   len(t['name']),
+                                   fix_encoding(t['name']),
+                                   t['unknown1'],)
+            
+            data += struct.pack('<84s', self.unknown2,)
+            
+            for p in self.players:
+                data += struct.pack(f'<B{len(p["name"])}s4sII4s',
+                                    len(p['name']),
+                                    fix_encoding(p['name']),
+                                    p['unknown1'],
+                                    p['faction'],
+                                    p['team'],
+                                    p['unknown2'],)
+                
+            data += struct.pack('<12sfIIB5I28sI50s',
+                                self.unknown3,
+                                self.starting_gold,
+                                self.unknown4,
+                                int(self.use_politics),
+                                self.unknown5,
+                                int(self.allow_settlements),
+                                int(self.allow_outposts),
+                                self.max_companies,
+                                self.max_settlements,
+                                self.max_outposts,
+                                self.unknown6,
+                                self.allied_victory,
+                                self.unknown7,)   
+            
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'EDTR', len(data)) + data
+            return data  
+            
+            
     class MgrdChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file, EDTR):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[4].data_offset)
+                print(f'reading MGRD chunk at offset {in_fh.tell()}')
                 (self.required,) = struct.unpack('=I', in_fh.read(4))
                 self.EDTR_ref = EDTR
-                print(f'Reading first tile @ {in_fh.tell()}')
+                #print(f'Reading first tile @ {in_fh.tell()}')
                 self.tiles = []
                 for _ in range(self.EDTR_ref.size_se):
                     self.tiles.append([self.GridTile(*struct.unpack('>BB', in_fh.read(2))) for _ in range(self.EDTR_ref.size_sw)])
@@ -239,6 +360,7 @@ class tgmFile:
         def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[6].data_offset)
+                print(f'reading FTRS chunk at offset {in_fh.tell()}')
                 start_pos = in_fh.tell()
                 (self.load,) = struct.unpack('=i', in_fh.read(4))
                 self.features = []
@@ -246,6 +368,7 @@ class tgmFile:
                     self.features.append(Feature(in_fh, TYPE))
                     if self.features[-1].header.index == 0xFFFF:
                         self.features.pop()
+                print(f'   read {len(self.features)} features')
         
         def pack(self):
             data = b''
@@ -263,10 +386,15 @@ class tgmFile:
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[7].data_offset)
+                print(f'reading FIDX chunk at offset {in_fh.tell()}')
                 start_pos = in_fh.tell()
                 (self.count,) = struct.unpack('=I', in_fh.read(4))
                 self.sizes = []
                 self.sizes.extend(struct.unpack(f'={self.count}I', in_fh.read(4*self.count)))
+        
+        def generate(self, FTRS):
+            self.sizes = [len(f.pack()) for f in FTRS.features if f.header.index != 0xFFFF]
+            self.count = len(self.sizes)
         
         def pack(self):
             data = struct.pack(f'<{self.count+1}I', self.count, *self.sizes)
@@ -278,6 +406,7 @@ class tgmFile:
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[10].data_offset)
+                print(f'reading GAME chunk at offset {in_fh.tell()}')
                 start_pos = in_fh.tell()
                 (self.first_id, self.next_id,) = struct.unpack('=II', in_fh.read(8))
                 self.ids = []
@@ -324,6 +453,7 @@ class tgmFile:
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[13].data_offset)
+                print(f'reading TYPE chunk at offset {in_fh.tell()}')
                 
                 (self.unknown0,
                  self.num_objs,) = struct.unpack('HH', in_fh.read(4))
@@ -332,7 +462,7 @@ class tgmFile:
                 self.by_index = {}
                 for i in range(0, self.num_objs):
                     new_obj = {}
-                    name = struct.unpack('32s', in_fh.read(32))[0].rstrip(b'\x00').decode('ascii')
+                    name = struct.unpack('32s', in_fh.read(32))[0].rstrip(b'\x00').decode('latin-1')
                     new_obj['name'] = name
                     new_obj['index'] = i
                     
@@ -363,6 +493,7 @@ class tgmFile:
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[14].data_offset)
+                print(f'reading HROS chunk at offset {in_fh.tell()}')
                 start_pos = in_fh.tell()
                 
                 (self.uk0,) = struct.unpack('=I', in_fh.read(4))
@@ -401,35 +532,31 @@ class tgmFile:
             return data
     
     class PlrsChunk:
-        
         def __init__(self, filename: str, iff: ifflib.iff_file):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[15].data_offset)
-                (unknown0,) = struct.unpack('I', in_fh.read(4))
+                print(f'reading PLRS chunk at offset {in_fh.tell()}')
+                (self.unknown0,) = struct.unpack('I', in_fh.read(4))
                 
                 self.players = []
-                for i in range(0, 8):
-                    start_pos = in_fh.tell()
-                    new_player = {}
-                    (new_player['unknown'],
-                     new_player['unknown0'],) = struct.unpack('I8s', in_fh.read(12))
-                    print(f'pos: {in_fh.tell()}')
-                    new_player['name'] = struct.unpack('=15s', in_fh.read(15))[0].rstrip(b'\x00').decode('utf-8')
-                    print(new_player['name'])
-                    (new_player['faction'],
-                     new_player['unknown1'],
-                     new_player['sai_len'],) = struct.unpack('=B12sxxxB', in_fh.read(17))
-                    print(new_player['sai_len'])
-                    (new_player['sai_name'],) = struct.unpack(f'={new_player["sai_len"]}s', in_fh.read(new_player['sai_len']))
-                    in_fh.seek(start_pos+4597)
-                    self.players.append(new_player)
-            return
+                for i in range(0, 9):
+                    self.players.append(Player(in_fh))
+        
+        def pack(self):
+            data = b''
+            data += struct.pack('<I', self.unknown0,)
+            for p in self.players:
+                data += p.pack()
+            data = addChunkPadding(data)
+            data = struct.pack('>4sI', b'PLRS', len(data)) + data
+            return data
 
     
     class ObjsChunk:
         def __init__(self, filename: str, iff: ifflib.iff_file, TYPE):
             with open(filename, "rb") as in_fh:
                 in_fh.seek(iff.data.children[16].data_offset)
+                print(f'reading OBJS chunk at offset {in_fh.tell()}')
                 (self.unknown0,) = struct.unpack('=4s', in_fh.read(4))
                 self.objs = []
                 
@@ -440,6 +567,8 @@ class tgmFile:
                         self.objs.pop()
                     #pprint(vars(self.objs[-1]))   
                     #print('')
+                
+                print(f'   read {len(self.objs)} objects')
         
         def pack(self):
             data = b''
@@ -467,7 +596,7 @@ class tgmFile:
                 self.chunks['TYPE'] = self.TypeChunk(self.filename, self.iff)
                 self.chunks['FTRS'] = self.FtrsChunk(self.filename, self.iff, self.chunks['TYPE'])
                 self.chunks['HROS'] = self.HrosChunk(self.filename, self.iff)
-                #self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
+                self.chunks['PLRS'] = self.PlrsChunk(self.filename, self.iff)
                 self.chunks['OBJS'] = self.ObjsChunk(self.filename, self.iff, self.chunks['TYPE'])
     
     def write(self, dest_path):
@@ -488,12 +617,116 @@ class tgmFile:
             out_fp.seek(4)
             out_fp.write(struct.pack('>I', file_size - 12))
 
+class Player:
+    def __init__(self, in_fh,):
+        self.fh = in_fh
+        start_pos = self.fh.tell()
+        self.start = self.fh.tell()
+        #print(f'reading player {i} @ {self.fh.tell()}')
+        (self.unknown0,
+         self.size0,
+         self.size1,) = struct.unpack('3I', self.fh.read(12))
+        #print(f'pos: {in_fh.tell()}')
+        self.name = struct.unpack('=15s', self.fh.read(15))[0].split(b'\x00')[0].decode('latin-1')
+        #print(f"   name {self.name}")
+        (self.faction,
+         self.unknown1,
+         self.starting_gold,
+         is_active,
+         self.sai_len,) = struct.unpack('=IffIB', self.fh.read(17))
+        self.is_active = bool(is_active)
+        
+        (self.sai_name,) = struct.unpack(f'={self.sai_len}s', self.fh.read(self.sai_len))
+        
+        size_factor = -20 if self.size0 == 0x12 else 0
+        if self.name == "Independent":
+            data_len = start_pos + 4592 - in_fh.tell() + size_factor
+            (self.data0,) = struct.unpack(f'={data_len}s',self.fh.read(data_len))
+        else:
+            self.economy = {}
+            (self.economy['gold'],
+             self.economy['unknown1'],
+             self.economy['stone'],
+             self.economy['unknown2'],
+             self.economy['wood'],
+             self.economy['unknown3'],
+             self.economy['iron'],
+             self.economy['unknown4'],
+             self.economy['mana'],
+             self.economy['unknown5'],) = struct.unpack('=10f', self.fh.read(40))
+            
+            (self.unknown2,) = struct.unpack('=4s', self.fh.read(4))
+            
+            self.political_relations = {}
+            (self.political_relations['player1'],
+             self.political_relations['player2'],
+             self.political_relations['player3'],
+             self.political_relations['player4'],
+             self.political_relations['player5'],
+             self.political_relations['player6'],
+             self.political_relations['player7'],
+             self.political_relations['player8'],) = struct.unpack('=8f', self.fh.read(32))
+            
+            (self.data1,
+             self.start_pos_se,
+             self.start_pos_sw,
+             self.unknown3,
+             self.allies,
+             self.lock_politics,
+             self.data2,) = struct.unpack(f'=4192sff12sBxxxBxxx{250 + size_factor}s', self.fh.read(4470 + size_factor))
+        
+    def pack(self):
+        data = b''
+        data += struct.pack(f'<3I15sIffIB{len(self.sai_name)}s',
+                            self.unknown0,
+                            self.size0,
+                            self.size1,
+                            self.name.encode('latin-1'),
+                            self.faction,
+                            self.unknown1,
+                            self.starting_gold,
+                            int(self.is_active),
+                            len(self.sai_name),
+                            self.sai_name,)
+        
+        if self.name == "Independent":
+            data += struct.pack(f'<{len(self.data0)}s', self.data0)
+        else:
+            print(f'start_pos : ({self.start_pos_se}, {self.start_pos_sw})')
+            data += struct.pack(f'<10f4s8f4192sff12sBxxxBxxx{len(self.data2)}s',
+                                self.economy['gold'],
+                                self.economy['unknown1'],
+                                self.economy['stone'],
+                                self.economy['unknown2'],
+                                self.economy['wood'],
+                                self.economy['unknown3'],
+                                self.economy['iron'],
+                                self.economy['unknown4'],
+                                self.economy['mana'],
+                                self.economy['unknown5'],
+                                self.unknown2,
+                                self.political_relations['player1'],
+                                self.political_relations['player2'],
+                                self.political_relations['player3'],
+                                self.political_relations['player4'],
+                                self.political_relations['player5'],
+                                self.political_relations['player6'],
+                                self.political_relations['player7'],
+                                self.political_relations['player8'],
+                                self.data1,
+                                self.start_pos_se,
+                                self.start_pos_sw,
+                                self.unknown3,
+                                self.allies,
+                                self.lock_politics,
+                                self.data2,)
+        return data
 
 class MapObj:
     def __init__(self, in_fh, TYPE):
         self.fh = in_fh
         self.TYPE_ref = TYPE
-        print(f'reading header @ {self.fh.tell()}')
+        #print(f'reading header @ {self.fh.tell()}')
         self.header = self.ObjectHeader(self.fh)
                 
     class ObjectHeader:
@@ -516,6 +749,13 @@ class MapObj:
     
     def pack(self):
         return self.header.pack()
+    
+    def __repr__(self):
+        try:
+            type_name = self.TYPE_ref.by_index[self.header.index]["name"]
+        except KeyError:
+            type_name = f'type index: {self.header.index}'
+        return f'{type_name} (ID:{self.header.editor_id}) @ ({self.header.hotspot_se}),({self.header.hotspot_sw},) player {self.header.player}\n'
 
 
 class Building(MapObj):
@@ -568,7 +808,7 @@ class Building(MapObj):
              self.magic_resistance,
              self.non_magic_resistance,
              self.construction_cost,) = struct.unpack('=2I9f', fh.read(44))
-            print(f'    Modifiers: size: {self.size}')
+            #print(f'    Modifiers: size: {self.size}')
             if self.size > 36:
                 (self.khaldunite_resistance,
                  self.padding,) = struct.unpack(f'=f{self.size-40}s', fh.read(4+self.size-40))
@@ -598,6 +838,9 @@ class Building(MapObj):
         if self.flag2 == 13:
             (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
         elif self.flag2 == 7:
+            (self.unknown_flag_data,) = struct.unpack('=B', self.fh.read(1))
+        elif self.flag2 == 5:
+            (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
             (self.unknown_flag_data,) = struct.unpack('=B', self.fh.read(1))
         
         (self.unknown1,
@@ -639,7 +882,7 @@ class Building(MapObj):
                 (self.padding0,
                  self.upgrade_index,) = struct.unpack(f'={pad_len}sHxxxx', self.fh.read(pad_len+6))
                 
-                print(f'  reading building mods @ {self.fh.tell()}')
+                #print(f'  reading building mods @ {self.fh.tell()}')
                 self.building_modifiers = self.Modifiers(self.fh)
                 
                 (self.important1,
@@ -648,7 +891,7 @@ class Building(MapObj):
                 if self.num_modifiers == 0:
                     (self.block_2,) = struct.unpack('=5s', self.fh.read(5))
                 else:
-                    print(f'nm:{self.num_modifiers}')
+                    #print(f'nm:{self.num_modifiers}')
                     for _ in range (self.num_modifiers):
                         new_mod = {}
                         (new_mod['id'],
@@ -666,12 +909,12 @@ class Building(MapObj):
                 for _ in range(0,8):
                     self.ct_components += x&1
                     x >>= 1
-                print(f' comp_flag {self.component_bitflag} yielded {self.ct_components} componenets')
+                #print(f' comp_flag {self.component_bitflag} yielded {self.ct_components} componenets')
                 # +1 for adtl blank comp
-                print(f'  reading comps @ {self.fh.tell()}')
+                #print(f'  reading comps @ {self.fh.tell()}')
                 for i in range(self.ct_components + 1):
                     new_comp = {}
-                    print(f'    reading comp @ {self.fh.tell()}')
+                    #print(f'    reading comp @ {self.fh.tell()}')
                     if (check_cost := struct.unpack('=f', self.fh.read(4))[0]) > 1:
                         new_comp['component_cost'] = check_cost
                     else:
@@ -679,7 +922,7 @@ class Building(MapObj):
                     
                     (new_comp['size'],) = struct.unpack('=I', self.fh.read(4))
                     upgrade_name = struct.unpack('=20s', self.fh.read(20))[0].split(sep=b'\00', maxsplit=1)[0]
-                    print(f'    un:{upgrade_name} {len(upgrade_name)}')
+                    #print(f'    un:{upgrade_name} {len(upgrade_name)}')
                     self.fh.seek(-20 + len(upgrade_name), 1)
                     if len(upgrade_name) > 1:
                         new_comp['upgrade_name'] = upgrade_name
@@ -718,6 +961,10 @@ class Building(MapObj):
             data += struct.pack('<f', self.current_hp,)
         elif self.flag2 == 7:
             data += struct.pack('<B', self.unknown_flag_data,)
+        elif self.flag2 == 5:
+            data += struct.pack('<f', self.current_hp,)
+            data += struct.pack('<B', self.unknown_flag_data,)
+        
         
         data += struct.pack('<12sBfHHfffffcf4sf',
                             self.unknown1,
@@ -790,7 +1037,7 @@ class Building(MapObj):
                                     self.base_wood_production,
                                     self.base_iron_production,
                                     self.base_mana_production,)
-        return data
+        return data        
 
 
 class Company(MapObj):  
@@ -843,7 +1090,7 @@ class Company(MapObj):
         # Find padding bytes & beginning of company mods, subtract back to start of unit positions
         zoc_to_pos_size = findBytes(b'\x00\x00\x00\x00\x04\x00\x00\x00', self.fh, search_start=100) - self.fh.tell() - 48
         
-        print(f'ztps:{zoc_to_pos_size}')
+        #print(f'ztps:{zoc_to_pos_size}')
         (self.zoc_to_pos,
          u0_pos_se,
          u0_pos_sw,
@@ -875,7 +1122,7 @@ class Company(MapObj):
         
         (start, num_modifiers,) = struct.unpack('=II', self.fh.read(8))
         self.company_modifiers_provided = [('start', start)]
-        print(f'  start: {start}, num: {num_modifiers} @ {self.fh.tell()}')
+        #print(f'  start: {start}, num: {num_modifiers} @ {self.fh.tell()}')
         for _ in range(num_modifiers):
             (key, value,) = struct.unpack('=Hfx', self.fh.read(7))
             self.company_modifiers_provided.append((comp_mods_lookup[key], value,))
@@ -1174,8 +1421,7 @@ def findBytes(query, fh, search_start=None ,search_length=None):
 def getMapObjClass(in_fh):
     (obj_class,) = struct.unpack('=B', in_fh.read(1))
     in_fh.seek(-1, 1)
-    print(type(obj_class))
-    print(f'obj_class: {obj_class:#x} @ {in_fh.tell()}')
+    #print(f'obj_class: {obj_class:#x} @ {in_fh.tell()}')
     match obj_class:
         case 0x10:
             return Misc
