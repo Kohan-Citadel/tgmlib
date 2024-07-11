@@ -29,6 +29,9 @@ class P:
     def copy(self):
         return P(se=self.se, sw=self.sw)
     
+    def distance(self, other):
+        return math.sqrt((self.se - other.se)**2 + (self.sw - other.sw)**2)
+    
     def __str__(self):
         out = f'map coordinates: ({self.se}, {self.sw})'
         if hasattr(self, 'x'):
