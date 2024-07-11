@@ -8,9 +8,8 @@ import tgmlib
 import random
 from configparser import ConfigParser
 from pathlib import Path
-import sys
-from PyQt5 import QtCore, QtWidgets, QtGui
-import time
+from PyQt5 import QtWidgets
+import qt_shared
 
 # things that need to be adjusted for each kingdom:
 #  - Whether or not it is being used
@@ -66,7 +65,7 @@ class Widget(QtWidgets.QWidget):
         self.player1 = PlayerSettings()
         self.player2 = PlayerSettings()
         self.map_settings = MapSettings()
-        self.map_settings.select_map.clicked.connect(self.openFileNameDialog)
+        self.map_settings.select_map.clicked.connect(self.selectMap)
         self.map_settings.generate_map.clicked.connect(self.generateMap)
         
         settings = QtWidgets.QHBoxLayout()
@@ -81,17 +80,14 @@ class Widget(QtWidgets.QWidget):
         layout.addWidget(back_button)
         self.setLayout(layout)
 
-    def openFileNameDialog(self):
-        options = QtWidgets.QFileDialog.Options()
-        self.filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
-                                                            "Select a Kohan Duels map",
-                                                            r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
-                                                            "Kohan Maps (*.tgm)",
-                                                            options=options)
-        if self.filename:
-            self.filename = Path(self.filename)
-            self.loadTGM()
+    def selectMap(self):
+        filename = qt_shared.FileDialog()
+        print(f'filename: {filename}')
+        if filename:
+            print('valid file')
+            self.filename = Path(filename[0])
             print(self.filename)
+            self.loadTGM()
     
     def loadTGM(self):
         self.tgm = tgmlib.tgmFile(self.filename)

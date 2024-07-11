@@ -751,7 +751,11 @@ class MapObj:
         return self.header.pack()
     
     def __repr__(self):
-        return f'{self.TYPE_ref.by_index[self.header.index]["name"]} @ ({self.header.hotspot_se}),({self.header.hotspot_sw},) player {self.header.player}\n'
+        try:
+            type_name = self.TYPE_ref.by_index[self.header.index]["name"]
+        except KeyError:
+            type_name = f'type index: {self.header.index}'
+        return f'{type_name} (ID:{self.header.editor_id}) @ ({self.header.hotspot_se}),({self.header.hotspot_sw},) player {self.header.player}\n'
 
 
 class Building(MapObj):
@@ -834,6 +838,9 @@ class Building(MapObj):
         if self.flag2 == 13:
             (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
         elif self.flag2 == 7:
+            (self.unknown_flag_data,) = struct.unpack('=B', self.fh.read(1))
+        elif self.flag2 == 5:
+            (self.current_hp,) = struct.unpack('=f', self.fh.read(4))
             (self.unknown_flag_data,) = struct.unpack('=B', self.fh.read(1))
         
         (self.unknown1,
@@ -954,6 +961,10 @@ class Building(MapObj):
             data += struct.pack('<f', self.current_hp,)
         elif self.flag2 == 7:
             data += struct.pack('<B', self.unknown_flag_data,)
+        elif self.flag2 == 5:
+            data += struct.pack('<f', self.current_hp,)
+            data += struct.pack('<B', self.unknown_flag_data,)
+        
         
         data += struct.pack('<12sBfHHfffffcf4sf',
                             self.unknown1,

@@ -5,6 +5,7 @@ import re
 import json
 from copy import deepcopy
 from PyQt5 import QtCore, QtWidgets, QtGui
+import qt_shared
 
 class Widget(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -60,10 +61,10 @@ class Widget(QtWidgets.QWidget):
         self.setMaximumSize(400,230)
 
     def loadMaps(self):
-        files = self.FileDialog(multiple=True,
-                                forOpen=True,
-                                filters=("Kohan Maps (*.tgm)", "All Files (*)",),
-                                isFolder=False)
+        files = qt_shared.FileDialog(multiple=True,
+                                     forOpen=True,
+                                     filters=("Kohan Maps (*.tgm)", "All Files (*)",),
+                                     isFolder=False)
         
         print(f'length of files: {len(files)}')
         print(f'type of files: {type(files)}')
@@ -80,53 +81,12 @@ class Widget(QtWidgets.QWidget):
             self.update.setEnabled(True)
     
     def Browse(self, menu, filters):
-        file = self.FileDialog(filters=filters)
+        file = qt_shared.FileDialog(filters=filters)
         if file:
             file = Path(file[0])
             menu.addItem(file.name)
             menu.setItemData(menu.count()-1, file, role=self.role)
             menu.setCurrentIndex(menu.count()-1)
-    
-    def FileDialog(self, directory=r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps", forOpen=True, isFolder=False, multiple=False, filters=("Kohan Maps (*.tgm)",), default_extension=None):
-        print(directory)
-        print(f"isFolder: {isFolder}")
-        options = QtWidgets.QFileDialog.Options()
-        options |= QtWidgets.QFileDialog.DontUseCustomDirectoryIcons
-        dialog = QtWidgets.QFileDialog()
-    
-        dialog.setFilter(dialog.filter() | QtCore.QDir.Hidden)
-    
-        # ARE WE TALKING ABOUT FILES OR FOLDERS
-        if isFolder:
-            dialog.setFileMode(QtWidgets.QFileDialog.Directory)
-            options |= QtWidgets.QFileDialog.ShowDirsOnly
-        else:
-            dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles if multiple else QtWidgets.QFileDialog.AnyFile)
-        # OPENING OR SAVING
-        dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen) if forOpen else dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
-    
-        # SET FILTERS, IF SPECIFIED
-        if filters and isFolder is False:
-            if type(filters) is str:
-                filters = (filters,)
-            dialog.setNameFilters(filters)
-        
-        if default_extension:
-            dialog.setDefaultSuffix(default_extension)
-    
-        # SET THE STARTING DIRECTORY
-        if directory:
-            dialog.setDirectory(str(directory))
-    
-        dialog.setOptions(options)    
-        if isFolder:
-            dialog.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
-    
-        if dialog.exec() == QtWidgets.QDialog.Accepted:
-            paths = dialog.selectedFiles()  # returns a list
-            return paths
-        else:
-            return None
     
     def loadTGMs(self):
         self.tgms = []
@@ -138,7 +98,7 @@ class Widget(QtWidgets.QWidget):
     def updateMaps(self):
         if not self.tgm_loaded:
             self.loadTGMs()
-        save_dir = self.FileDialog(directory=self.files[0].parent, forOpen=True, isFolder=True)
+        save_dir = qt_shared.FileDialog(directory=self.files[0].parent, forOpen=True, isFolder=True)
         if save_dir:
             save_dir = Path(save_dir[0])
             self.tgm_loaded = False
@@ -148,10 +108,12 @@ class Widget(QtWidgets.QWidget):
                 name_mapping = json.load(fp)
             
             for tgm in self.tgms:
+                print(f'Updating {tgm.filename} ... ', end='')
                 update(tgm,
                        ref_map,
                        name_mapping,
                        save_dir/tgm.filename.name)
+                print('finished!')
         
 
 

@@ -1,5 +1,3 @@
-import argparse
-import json
 import tgmlib
 import update_map
 import mirror_map

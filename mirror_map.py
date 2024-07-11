@@ -5,6 +5,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from pathlib import Path
 from PIL import Image
 from io import BytesIO
+import qt_shared
 
 debug = False
 
@@ -49,8 +50,9 @@ class Widget(QtWidgets.QWidget):
         #self.setWindowTitle("Kohan Duels Map Randomizer")
         
         self.mirror_settings = MirrorSettings(self)
-        self.mirror_settings.select_map.clicked.connect(self.openFileNameDialog)
+        self.mirror_settings.select_map.clicked.connect(self.selectMap)
         self.mirror_settings.mirror_map.clicked.connect(self.mirrorMap)
+        self.mirror_settings.save_map.clicked.connect(self.saveMap)
         
         self.thumbnail = Thumbnail(self)
         self.mirror_settings.mirror_map.clicked.connect(self.thumbnail.render)
@@ -66,17 +68,12 @@ class Widget(QtWidgets.QWidget):
         layout.addWidget(back_button)
         self.setLayout(layout)
 
-    def openFileNameDialog(self):
-        options = QtWidgets.QFileDialog.Options()
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(None,
-                                                            "Select a Map to Mirror",
-                                                            r"C:\Program Files (x86)\Steam\steamapps\common\Kohan Ahrimans Gift\Maps",
-                                                            "Kohan Maps (*.tgm)",
-                                                            options=options)
+    def selectMap(self):
+        filename = qt_shared.FileDialog()
         print(f'filename: {filename}')
-        if filename and filename != " ":
+        if filename:
             print('valid file')
-            self.filename = Path(filename)
+            self.filename = Path(filename[0])
             print(self.filename)
             self.loadTGM()
             self.mirror_settings.mirror_map.setEnabled(True)
@@ -92,17 +89,25 @@ class Widget(QtWidgets.QWidget):
         if not self.tgm_loaded:
             self.loadTGM()
         self.tgm_loaded = False
+        print(f'Mirroring {self.tgm.filename} ... ', end='')
         mirror(self.tgm,
                self.mirror_settings.sections.currentText(),
                self.mirror_settings.source_region.currentText(),
                symmetry_type=self.mirror_settings.symmetry.currentText())
+        print('finished!')
         self.mirror_settings.save_map.setEnabled(True)
-# =============================================================================
-#         outfile = self.filename.parent/(self.filename.stem+'-mirrored.tgm')
-#         print(f'saving map to {outfile}')
-#         outfile.parent.mkdir(exist_ok=True, parents=True)
-#         self.tgm.write(outfile)
-# =============================================================================
+        
+    
+    def saveMap(self):
+        save_name = self.filename.parent/(self.filename.stem+'-mirrored.tgm')
+        outfile = Path(qt_shared.FileDialog(directory=self.filename.parent,
+                                       forOpen=False,
+                                       isFolder=False,
+                                       default_name=save_name,
+                                       default_extension="tgm")[0])
+        print(f'saving map to {outfile}')
+        outfile.parent.mkdir(exist_ok=True, parents=True)
+        self.tgm.write(outfile)
 
 class MirrorSettings(QtWidgets.QWidget):
     def __init__(self, parent):
@@ -153,6 +158,7 @@ class Thumbnail(QtWidgets.QWidget):
         self.setLayout(layout)
         
     def render(self):
+        print('Rendering thumbnail ... ', end='')
         map_size = self.parent().tgm.chunks['EDTR'].size_se
         render_x = map_size * 6 #x dim of tile
         render_y = map_size * 4 #y dim of tile
@@ -187,6 +193,7 @@ class Thumbnail(QtWidgets.QWidget):
         pixmap = QtGui.QPixmap()
         pixmap.loadFromData(img_buffer.getvalue())
         self.map_display.setPixmap(pixmap)
+        print('finished!')
 
 tile_symmetries = {
     0x0: {'rotation': (0x0, 0x0, 0x0, 0x0,),
@@ -368,9 +375,12 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                 if 0 <= new_f.header.player <= 7:
                     new_f.header.player = (new_f.header.player + pos) % 8
                 new_f.header.editor_id = tgm.chunks['GAME'].next_id
-                tgm.chunks['GAME'].next_id += 1
-                tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
-                tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
+                if new_f.header.editor_id < 0x8000:
+                    tgm.chunks['GAME'].next_id += 1
+                    tgm.chunks['GAME'].ids[new_f.header.editor_id] = True
+                    tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
+                else:
+                    print(f'GAME id overflow on feature {new_f}')
                 tgm.chunks['FTRS'].features.append(new_f)
                 tgm.chunks['FIDX'].count += 1
                 tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
@@ -403,6 +413,9 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                     tgm.chunks['GAME'].load_flags[new_o.header.editor_id] = True
                     tgm.chunks['OBJS'].objs.append(new_o)
         else:
-            tgm.chunks['GAME'].ids[o.header.editor_id] = False
-            tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
-            tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+            try:
+                tgm.chunks['GAME'].ids[o.header.editor_id] = False
+                tgm.chunks['GAME'].load_flags[o.header.editor_id] = False
+                tgm.chunks['OBJS'].objs.pop(tgm.chunks['OBJS'].objs.index(o))
+            except IndexError:
+                print(f'Failed to delete object {o}: index overflow in GAME ids')
