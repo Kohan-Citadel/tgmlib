@@ -40,6 +40,15 @@ class P:
     
     def __sub__(self, other):
         return P(se=self.se - other.se, sw=self.sw - other.sw)
+    
+    def __mul__(self, scalar):
+        return P(se=self.se * scalar, sw=self.sw * scalar)
+    
+    def __truediv__(self, scalar):
+        return P(se=self.se / scalar, sw=self.sw / scalar)
+    
+    def __len__(self):
+        return round(math.sqrt(pow(self.se, 2) + pow(self.sw, 2)))
 
 class Widget(QtWidgets.QWidget):
     def __init__(self, parent=None):
