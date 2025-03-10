@@ -22,7 +22,6 @@ import qt_shared
 #  - Starting outpost
 
 num_players = 2
-num_heroes = 4
 starting_outpost = False
 
 color_mapping = {
@@ -103,7 +102,7 @@ class Widget(QtWidgets.QWidget):
         for p in players:
             p.starting_gold = self.map_settings.starting_gold.value()
         kingdoms = getActiveKingdoms(self.tgm)
-        player_mapping = setPlayerData(self.tgm, players, kingdoms)
+        player_mapping = setPlayerData(self.tgm, players, kingdoms, self.map_settings.heroes.value())
         updateObjects(self.tgm, player_mapping)
         updateFeatures(self.tgm, player_mapping)
         outfile = self.filename.parent/'RandomizedKDMaps'/(self.filename.stem+f'-{players[0].player_name}vs{players[1].player_name}.tgm')
@@ -226,7 +225,7 @@ def getActiveKingdoms(tgm):
     tgm.chunks['EDTR'].scenario_players.setall(False)    
     return active_kingdoms
 
-def setPlayerData(tgm, players, active_kingdoms):
+def setPlayerData(tgm, players, active_kingdoms, num_heroes):
     # holds a mapping between existing player numbers and new ones
     player_mapping = {}
     for p in players:
