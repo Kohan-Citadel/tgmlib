@@ -358,15 +358,25 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     
     for se in range(size_se):
         for sw in range(size_sw):
+            # use cross product to determine if the coordinate in question is within the source region
             crosses = [cross(axis, P(se+0.5,sw+0.5), side) for axis, side in zip(axes, sides)]
             if all(crosses):
-                for pos in range(1, sections):
-                    new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*pos, axis=axes[0], debug=debug)
+                # for each destination region:
+                for section in range(1, sections):
+                    new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*section, axis=axes[0], debug=debug)
                     tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
                     new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
                     try:
                         new_layout = tile_symmetries[new_tile.layout][symmetry_type]
-                        new_tile.layout = new_layout[pos] if symmetry_type == 'rotation' else new_layout[symmetry_axis]
+                        if symmetry_type == 'rotation':
+                            if sections == 2:
+                                # if a half-map rotational symmetry, tiles need to be rotated an adtl 90deg
+                                key = section + 1
+                            else:
+                                key = section
+                        else:
+                            key = symmetry_axis
+                        new_tile.layout = new_layout[key]
                     except Exception:
                         print(f'missing tile rotation info for ({se}, {sw})')
                         
