@@ -276,7 +276,15 @@ def flipCoords(center, point, symmetry_type, angle=None, axis=None, debug=False)
         det = d.se*d.se + d.sw*d.sw
         a = (d.sw*(point.sw-axis[0].sw)+d.se*(point.se-axis[0].se))/det
         closest = P(axis[0].se+a*d.se, axis[0].sw+a*d.sw)
-        return closest + (closest - point)
+        reflected_position = closest * 2 - point
+        
+        # Even-dimension features need to be centered at (0.999, 1.001) to appear at (1, 1)
+        if math.isclose(point.se % 1, 0.999, abs_tol=1e-5):
+            reflected_position.se -= 0.002
+        if math.isclose(point.sw % 1, 0.001, abs_tol=1e-5):
+            reflected_position.sw += 0.002
+        
+        return reflected_position
 
 def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     #choose axis
