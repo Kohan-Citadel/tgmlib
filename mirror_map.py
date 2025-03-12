@@ -40,6 +40,15 @@ class P:
     
     def __sub__(self, other):
         return P(se=self.se - other.se, sw=self.sw - other.sw)
+    
+    def __mul__(self, scalar):
+        return P(se=self.se * scalar, sw=self.sw * scalar)
+    
+    def __truediv__(self, scalar):
+        return P(se=self.se / scalar, sw=self.sw / scalar)
+    
+    def __len__(self):
+        return round(math.sqrt(pow(self.se, 2) + pow(self.sw, 2)))
 
 class Widget(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -267,7 +276,15 @@ def flipCoords(center, point, symmetry_type, angle=None, axis=None, debug=False)
         det = d.se*d.se + d.sw*d.sw
         a = (d.sw*(point.sw-axis[0].sw)+d.se*(point.se-axis[0].se))/det
         closest = P(axis[0].se+a*d.se, axis[0].sw+a*d.sw)
-        return closest + (closest - point)
+        reflected_position = closest * 2 - point
+        
+        # Even-dimension features need to be centered at (0.999, 1.001) to appear at (1, 1)
+        if math.isclose(point.se % 1, 0.999, abs_tol=1e-5):
+            reflected_position.se -= 0.002
+        if math.isclose(point.sw % 1, 0.001, abs_tol=1e-5):
+            reflected_position.sw += 0.002
+        
+        return reflected_position
 
 def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     #choose axis
@@ -349,15 +366,25 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
     
     for se in range(size_se):
         for sw in range(size_sw):
+            # use cross product to determine if the coordinate in question is within the source region
             crosses = [cross(axis, P(se+0.5,sw+0.5), side) for axis, side in zip(axes, sides)]
             if all(crosses):
-                for pos in range(1, sections):
-                    new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*pos, axis=axes[0], debug=debug)
+                # for each destination region:
+                for section in range(1, sections):
+                    new_pos = flipCoords(center, P(se+0.5, sw+0.5), symmetry_type, angle=rotational_offset*section, axis=axes[0], debug=debug)
                     tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)] = tgm.chunks['MGRD'].tiles[se][sw].copy()
                     new_tile = tgm.chunks['MGRD'].tiles[int(new_pos.se)][int(new_pos.sw)]
                     try:
                         new_layout = tile_symmetries[new_tile.layout][symmetry_type]
-                        new_tile.layout = new_layout[pos] if symmetry_type == 'rotation' else new_layout[symmetry_axis]
+                        if symmetry_type == 'rotation':
+                            if sections == 2:
+                                # if a half-map rotational symmetry, tiles need to be rotated an adtl 90deg
+                                key = section + 1
+                            else:
+                                key = section
+                        else:
+                            key = symmetry_axis
+                        new_tile.layout = new_layout[key]
                     except Exception:
                         print(f'missing tile rotation info for ({se}, {sw})')
                         

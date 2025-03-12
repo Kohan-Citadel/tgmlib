@@ -859,6 +859,7 @@ class Building(MapObj):
          self.booty_value,) = struct.unpack('=12sBfHHfffffcf4sf', self.fh.read(54))
         
         #print(f'uk0name: {self.name}, player: {self.player}, index: {self.index}, id: {self.editor_id}, hs_sw: {self.hotspot_sw}, hs_se: {self.hotspot_se}')
+        print(f"top of match, key is {self.TYPE_ref.by_index[self.header.index]['subtype']}")
         match self.TYPE_ref.by_index[self.header.index]['subtype']:
             # Ruins
             case 0:
@@ -866,6 +867,7 @@ class Building(MapObj):
             
             # Settlements
             case 1|5|6|7|8:
+                print('entering match statement, settlement case')
                 self.militia = self.MilitiaData(self.fh)
                 if self.fh.read(1) == b'\x00':
                     uk5_size = 10
@@ -876,7 +878,7 @@ class Building(MapObj):
                  self.component_bitflag,
                  self.unknown6,
                  self.inportant0) = struct.unpack(f'={uk5_size}sB4sI', self.fh.read(uk5_size+9))
-                
+                print(f'component bitflag: {self.component_bitflag}')
                 # this padding is different sizes with no apparent flags, so scan ahead to find 0xA040
                 pad_len = findBytes(b'\xA0\x40', self.fh) - self.fh.tell() + 6
                 (self.padding0,
@@ -954,7 +956,7 @@ class Building(MapObj):
         data = self.header.pack()
         
         data += struct.pack('<20sBB',
-                            self.name,
+                            fix_encoding(self.name),
                             self.flag1,
                             self.flag2,)
         if self.flag2 == 13:
