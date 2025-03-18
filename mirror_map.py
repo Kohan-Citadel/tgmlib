@@ -1,6 +1,7 @@
 import tgmlib
 from copy import deepcopy
 import math
+import random
 from PyQt5 import QtCore, QtWidgets, QtGui
 from pathlib import Path
 from PIL import Image
@@ -102,7 +103,8 @@ class Widget(QtWidgets.QWidget):
         mirror(self.tgm,
                self.mirror_settings.sections.currentText(),
                self.mirror_settings.source_region.currentText(),
-               symmetry_type=self.mirror_settings.symmetry.currentText())
+               symmetry_type=self.mirror_settings.symmetry.currentText(),
+               randomize_features=True)
         print('finished!')
         self.mirror_settings.save_map.setEnabled(True)
         
@@ -257,6 +259,99 @@ even_objs_to_offset = [
     ]
 
 
+randomization_dict = {
+    "mountain": (                 
+        ("1X1_MOUNTAIN1",
+         "1X1_MOUNTAIN2",
+         "1X1_MOUNTAIN3",
+         "1X1_MOUNTAIN4",
+         "1X1_MOUNTAIN5",
+         ),
+        ("1X1_SNOW_MOUNTAIN1",
+         "1X1_SNOW_MOUNTAIN2",
+         "1X1_SNOW_MOUNTAIN3",
+         ),
+        ("2X2_DSRT_MNT1",
+         "2X2_DSRT_MNT2",
+         "2X2_DSRT_MNT3",
+         ),
+        ("3X3_DSRT_MNT1",
+         "3X3_DSRT_MNT2",
+         "3X3_DSRT_MNT3",
+         ),
+        ("3X3_EVIL_MOUNTAIN1",
+         "3X3_EVIL_MOUNTAIN2",
+         "3X3_EVIL_MOUNTAIN3",
+         "3X3_EVIL_MOUNTAIN4",
+         ),
+        ("3X3_MOUNTAIN1",
+         "3X3_MOUNTAIN2",
+         "3X3_MOUNTAIN3",
+         "3X3_MOUNTAIN4",
+         "3X3_MOUNTAIN5",
+         "3X3_MOUNTAIN6",
+         ),
+        ("3X3_SNOW_MOUNTAIN1",
+         "3X3_SNOW_MOUNTAIN2",
+         "3X3_SNOW_MOUNTAIN3",
+         ),
+        ("5X5_DSRT_MNT1",
+         "5X5_DSRT_MNT2",
+         ),
+        ("5X5_MOUNTAIN1",
+         "5X5_MOUNTAIN2",
+         "5X5_MOUNTAIN1",
+         ),
+        ("5X5_SNOW_MOUNTAIN1",
+         "5X5_SNOW_MOUNTAIN2",
+         ),
+    ),
+    "rock": (
+        ("SMOOTH_MOUNTAIN1",  # Large
+         "SMOOTH_MOUNTAIN4",
+         "SMOOTH_MOUNTAIN6",
+         ),
+        ("SMOOTH_MOUNTAIN2",  # Small
+         "SMOOTH_MOUNTAIN5",
+         "SMOOTH_MOUNTAIN7",
+         "SMOOTH_MOUNTAIN9",
+         "SMOOTH_MOUNTAIN10",
+         ),
+        ("DESERT_ROCK1",  # Small
+         "DESERT_ROCK3",
+         "DESERT_ROCK4",
+         "DESERT_ROCK8",
+         "DESERT_ROCK9",
+         "DESERT_ROCK10",
+         ),
+        ("DESERT_ROCK5",  # Medium
+         "DESERT_ROCK6",
+         "DESERT_ROCK7",
+         ),
+        ("DESERT_ROCK11",  # Large
+         "DESERT_ROCK12",
+         "DESERT_ROCK13",
+         "DESERT_ROCK14",
+         "DESERT_ROCK15",
+         "DESERT_ROCK16",
+        ),
+        ("EVIL_DOODAD01",
+         "EVIL_DOODAD02",
+         "EVIL_DOODAD03",
+         "EVIL_DOODAD04",
+         "EVIL_DOODAD05",
+        ),
+    ),
+    "flower": (
+        ("FLOWERS",
+         "FLOWERS_BLUE",
+         "FLOWERS_RED",
+         "FLOWERS_YELLOW",
+        ),
+    ),
+    } 
+
+
 # from https://stackoverflow.com/a/3838398
 def cross(axis, point, side):
     v1 = axis[1] - axis[0]   # Vector 1
@@ -398,6 +493,11 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
             print(f"invalid sections count '{sections}'\nsections must be 2 or 4")
             raise SystemExit()
     
+    try:
+        randomize_features = kwargs['randomize_features']
+    except:
+        randomize_features = False
+    
     # radians between mirroring regions
     rotational_offset = 2 * math.pi / sections
     
@@ -445,6 +545,20 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                     tgm.chunks['GAME'].load_flags[new_f.header.editor_id] = True
                 else:
                     print(f'GAME id overflow on feature {new_f}')
+                
+                # randomize feature
+                if randomize_features:
+                    ftr_type = tgm.chunks['TYPE'].by_index[new_f.header.index]
+                    for v in randomization_dict.values():
+                        for group in v:
+                            if ftr_type['name'] in group:
+                                new_type = random.choice(group)
+                                new_f.header.index = tgm.chunks['TYPE'].by_name[new_type]['index']
+                                break # this will break out of both loops
+                        else: # no break
+                            continue
+                        break # only break here if the inner loop also broke
+                
                 tgm.chunks['FTRS'].features.append(new_f)
                 tgm.chunks['FIDX'].count += 1
                 tgm.chunks['FIDX'].sizes.append(len(new_f.pack()))
