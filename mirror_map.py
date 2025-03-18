@@ -240,6 +240,21 @@ tile_symmetries = {
     }
 
 
+even_objs_to_offset = [
+    "COUNCIL_FORTRESS",
+    "COUNCIL_OUTPOST",
+    "CEYAH_FORTRESS",
+    "CEYAH_OUTPOST",
+    "ROYALIST_FORTRESS",
+    "ROYALIST_OUTPOST",
+    "NATIONALIST_FORTRESS",
+    "NATIONALIST_OUTPOST",
+    "ASSAULT_FORT",
+    "SLAAN_VILLAGE",
+    "BRIGAND_CAMP",
+    "SPREADING_SLAAN_LAIR",
+    "SLAAN_LAIR",
+    ]
 
 
 # from https://stackoverflow.com/a/3838398
@@ -269,7 +284,20 @@ def flipCoords(center, point, symmetry_type, angle=None, axis=None, debug=False)
             print(f"  v1 {v1}\n  se2 = {v1.se * math.cos(angle)} - {v1.sw * math.sin(angle)}\n  sw2 = {v1.se * math.sin(angle)} + {v1.sw * math.cos(angle)}")
             print(f"  v2: {P(se2, sw2)}")
             print(f"  final pos: {P(se2, sw2) + center}")
-        return center - P(se2, sw2)
+        
+        rotated_position = center - P(se2, sw2)
+        
+        if math.isclose(point.se % 1, 0.999, abs_tol=1e-5):
+            rotated_position.sw += 0.002
+        elif math.isclose(point.se % 1, 0.001, abs_tol=1e-5):
+            rotated_position.sw -= 0.002
+            
+        if math.isclose(point.sw % 1, 0.001, abs_tol=1e-5):
+            rotated_position.se -= 0.002
+        elif math.isclose(point.sw % 1, 0.999, abs_tol=1e-5):
+            rotated_position.se += 0.002
+        
+        return rotated_position
     if symmetry_type == 'reflection':
         #print(f'   point: {point}')
         d = axis[1] - axis[0]
@@ -279,10 +307,19 @@ def flipCoords(center, point, symmetry_type, angle=None, axis=None, debug=False)
         reflected_position = closest * 2 - point
         
         # Even-dimension features need to be centered at (0.999, 1.001) to appear at (1, 1)
+        # if point.se is 0.999, reflected_position.sw will be 0.999 but it should be 1.001
+        # so add 0.002 to rectify this
+        # for some reason, certain objects (namely BARBARIAN_VILLAGE) are instead at (1.001, 0.999)
+        # so we check for that as well
         if math.isclose(point.se % 1, 0.999, abs_tol=1e-5):
-            reflected_position.se -= 0.002
-        if math.isclose(point.sw % 1, 0.001, abs_tol=1e-5):
             reflected_position.sw += 0.002
+        elif math.isclose(point.se % 1, 0.001, abs_tol=1e-5):
+            reflected_position.sw -= 0.002
+            
+        if math.isclose(point.sw % 1, 0.001, abs_tol=1e-5):
+            reflected_position.se -= 0.002
+        elif math.isclose(point.sw % 1, 0.999, abs_tol=1e-5):
+            reflected_position.se += 0.002
         
         return reflected_position
 
@@ -427,11 +464,20 @@ def mirror(tgm: tgmlib.tgmFile, sections, source_region, **kwargs):
                 # TODO Enable company mirroring
                 if type(o) != tgmlib.Company:
                     o.fh = None
+                    # if rotating, check if the object is a 2x2 building that has a hotspot at (0.5, 0.5)
+                    # then subtract (0.5, 0.5) before flipping and add it back afterwards
+                    old_hotspot = P(o.header.hotspot_se, o.header.hotspot_sw)
+                    new_hotspot = P(0, 0)
+                    if symmetry_type == 'rotation' and tgm.chunks['TYPE'].by_index[o.header.index]['name'] in even_objs_to_offset:
+                        old_hotspot -= P(0.5, 0.5)
+                        new_hotspot += P(0.5, 0.5)
+                        
                     new_o = deepcopy(o)
-                    new_pos = flipCoords(center, P(o.header.hotspot_se, o.header.hotspot_sw), symmetry_type, angle=rotational_offset*pos, axis=axes[0])
-                    new_o.header.hotspot_se, new_o.header.hotspot_sw = new_pos.se, new_pos.sw
+                    new_hotspot += flipCoords(center, old_hotspot, symmetry_type, angle=rotational_offset*pos, axis=axes[0])
+                    new_o.header.hotspot_se, new_o.header.hotspot_sw = new_hotspot.se, new_hotspot.sw
                     new_o.header.editor_id = tgm.chunks['GAME'].next_id
-                    new_o.pos_se, new_o.pos_sw = int(new_pos.se), int(new_pos.sw)
+                    new_o.pos_se, new_o.pos_sw = int(new_hotspot.se), int(new_hotspot.sw)
+                    
                     # sets each player owned obj to a new player per region
                     if 0 <= new_o.header.player <= 7:
                         new_o.header.player = (new_o.header.player + pos) % 8
