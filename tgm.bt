@@ -58,6 +58,17 @@ typedef struct {
     uint16 pos_sw;
 } POSITION;
 
+typedef struct {
+    byte player_1: 1;
+    byte player_2: 1;
+    byte player_3: 1;
+    byte player_4: 1;
+    byte player_5: 1;
+    byte player_6: 1;
+    byte player_7: 1;
+    byte player_8: 1;
+} PLAYER_BITFLAG;
+
 // represents a single technology in a player section in the TECH chunk
 typedef struct {
     uint32 name_len;
@@ -114,17 +125,20 @@ typedef struct {
     uint size_se;
     uint size_sw;
     int deathmatch_teams;
-    char unknown2[8] <fgcolor=cDkGray>;
+    int deathmatch_kingdoms;
+    PLAYER_BITFLAG deathmatch_players;
+    byte padding_deathmatch_players[3] <hidden=true>;
     int custom_play_kingdoms;
-    char unknown3[4] <fgcolor=cDkGray>;
-    int scenario_deathmatch_kingdoms;
-    char unknown4[4] <fgcolor=cDkGray>;
-    
+    PLAYER_BITFLAG custom_play_players;
+    byte padding_custom_play_players[3] <hidden=true>;
+    int scenario_kingdoms;
+    PLAYER_BITFLAG scenario_players;
+    byte padding_scenario_players[3] <hidden=true>;
     
     struct KINGDOM {
         uint is_active;  // 0x01 for active
         ubyte name_len;
-        char player_x_name[name_len];
+        char name[name_len];
         char unknown[4];  // Seems to always be null
         uint32 team;  // 0-indexed, will be 0xFFFFFFFF if set to 'custom'
         ubyte SAIe_len;
@@ -148,7 +162,7 @@ typedef struct {
         ubyte name_len;
         char sai_name[name_len];
         byte unknown[4];
-        uint32 faction;
+        uint32 faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
         uint32 team;  //  0xFFFFFFFF is No Team/Custom
         byte unknown1[4];
     } players[8] <optimize=false>;
@@ -162,7 +176,7 @@ typedef struct {
     int max_companies;
     int max_settlement;
     int max_outpost;
-    byte padding[28];
+    byte padding1[28];
     int allied_victory; // 0: alliance or single; 1: single only; 2: alliance only
     byte unknown7[50];
 } EDTR_CHUNK;
@@ -217,14 +231,16 @@ typedef struct {
         uint16 index;
         uint32 editor_id;
         HOTSPOT pos;
-        BigEndian();
-        short flag;  // 0x092F if no additional data
-        LittleEndian();
-        if (flag == 0x090F) {
-            byte more_data[4] <fgcolor=cDkGray>;  // Can be deleted and feature still works as expected
+        if (index != 0xFFFF) {
+            BigEndian();
+            short flag;  // 0x092F if no additional data
+            LittleEndian();
+            if (flag == 0x090F) {
+                byte more_data[4] <fgcolor=cDkGray>;  // Can be deleted and feature still works as expected
+            }
         }
     } FEATURE <comment=FeatureComment>;
-    while (FTell() < start_pos + chunk_length) {
+    while (FTell() < start_pos + chunk_length - 12) {
         FEATURE features;
     }
 } FTRS_CHUNK;
@@ -272,7 +288,11 @@ typedef struct {
     int next_id;  // id to be assigned to next object
     short ids[0x8000];  // 0xFFFF if unused, 0x0000 if used
     int total_ids;
-    byte obj_flags[start_pos + chunk_length - FTell()];
+    byte load_flags[4096];
+    byte unknown[12];
+    PLAYER_BITFLAG monster_war;
+        
+    byte more[start_pos + chunk_length - FTell()];
 } GAME_CHUNK;
 
 typedef struct {
@@ -304,10 +324,10 @@ typedef struct {
         byte name_len;
         char name[name_len];
         uint status;  // 0 when unused, 1 when amulet, 2, when available, 3 when in comp
-        byte data[4];
+        uint level;
         float experience;
-        BOOL awakened;  // 0 when unopened, 1 when opened
-        short s1;
+        BOOL awakened <comment="Whether hero has ever been awakened">;  // 0 when unopened, 1 when opened
+        ushort engage;
         int player_id;
         int editor_id;
     } HERO <comment=this.name>;
@@ -349,7 +369,7 @@ typedef struct {
         uint32 faction;  // 0x01 for Nationalist, 0x02 for Royalist, 0x03 for Council, 0x04 for Ceyah
         float f1;
         float starting_gold;
-        int unknown3;
+        BOOL is_active;
         BigEndian();
         byte sai_len;
         LittleEndian();
@@ -361,7 +381,37 @@ typedef struct {
         if (player_x_name == "Independent") {
             byte data[start_pos + 4592 - FTell() + size_factor];
         } else {
-            byte data[start_pos + 4597 - FTell() + size_factor];
+            struct ECONOMY {
+                float gold <fgcolor=cBlack, bgcolor=0x00DCFC>;
+                float unknown0;
+                float stone <fgcolor=cYellow, bgcolor=0x707070>;
+                float unknown1;
+                float wood <fgcolor=cYellow, bgcolor=0x2A578B>;
+                float unknown2;
+                float iron <fgcolor=cYellow, bgcolor=0x505050>;
+                float unknown3;
+                float mana <fgcolor=cYellow, bgcolor=0xD27619>;
+                float unknown4;
+            } economy;
+            byte unknown0[4];
+            struct POLITIC_RELATION {  // 0: self, 1: ally, 2: neutral, 3: enemy
+                int player_1;
+                int player_2;
+                int player_3;
+                int player_4;
+                int player_5;
+                int player_6;
+                int player_7;
+                int player_8;
+            } political_relations;
+            
+            byte data1[4323-55-44-32];
+            HOTSPOT start_position;
+            byte unknown[12];
+            PLAYER_BITFLAG allies;
+            byte padding0[3];
+            PLAYER_BITFLAG politics_locked;
+            byte data2[270 - 17 + size_factor];
         }
         // There is a ton more data after this,
         // and apparently no pointer to the next section
@@ -391,6 +441,27 @@ typedef struct {
     struct COMPANY;
     
     switch (header.obj_class) {
+        case 0x10:
+            // ruin
+            if (header.index != 0xFFFF) {
+                byte flag1;
+                byte flag2;
+                if (flag2 == 0x0B) {
+                    short s0;
+                }
+                switch (TYPE.objects[header.index].sub_type) {
+                    case 0:
+                        byte data[4];
+                        break;
+                    case 1:
+                        byte data[25];
+                        break;
+                    case 2:
+                        byte data[25];
+                        break;
+                }
+            }
+            break;
         case 0x24:
             BUILDING building_data;
             break;
@@ -408,7 +479,11 @@ typedef struct {
             float current_hp;
         } else if (flag2 == 7) {  // 0x07 for spider lair in bonehenge
             byte unknown_data;
+        } else if (flag2 == 5) {  // 13 & 7 == 5, and this is a combination of the two
+            float current_hp;
+            byte unknown_data;
         }
+            
         char unknown1[12];
         ubyte status <comment=ObjStatusComment>;
         float uk1;
@@ -496,7 +571,9 @@ typedef struct {
                 
                 local int pad_end = FTell();
                 FSeek(pad_start);
-                byte padding[pad_end - pad_start + 14] <fgcolor=cDkGray>;  // Can be safely zeroed
+                byte padding0[pad_end - pad_start + 4] <fgcolor=cDkGray>;  // Can be safely zeroed
+                ushort upgrade_index <comment=TypeLookup>;  // type index of upgraded version
+                byte padding1[8];
                 
                 struct BUILDING_MODIFIERS {
                     int size <fgcolor=0x3C8E38>;
@@ -592,8 +669,10 @@ typedef struct {
         char name[22];
         FSeek(FTell()+6);
         uint16 captain_id;
-        FSeek(start_pos+46);
+        int occupy_flag0 <fgcolor=cDkRed>;
         float control_zone;
+        int occupy_flag1 <fgcolor=cDkRed>;
+        int required <fgcolor=cDkRed>;
         FSeek(start_pos+62);
         struct UPKEEP {
             float stone <fgcolor=cYellow, bgcolor=0x707070>;
@@ -601,7 +680,6 @@ typedef struct {
             float iron <fgcolor=cYellow, bgcolor=0x505050>;
             float mana <fgcolor=cYellow, bgcolor=0xD27619>;
         } upkeep;
-        FSeek(start_pos+78);
         float speed <comment=Str("%i MS", this*14)>;  // company MS in tiles per second. A value of 1 equals 14MS
         
         float f0;
@@ -618,12 +696,17 @@ typedef struct {
         } morale;
         FSeek(FTell()+16);
         float zone_of_control;
-        FSeek(start_pos+256+58);
-        //FindFirst
+        int null;
+        FSeek(FTell()+8);
+        byte slowest_unit;  // unit index (0-6) of the unit with the slowest speed. This will determine the company speed
+        
+        local int64 mods_start = FindFirst("0000000004000000,h", true, false, 0, 0.0, 1, FTell()+100);
+        FSeek(mods_start-48);
+        //FSeek(start_pos+256+58);
         HOTSPOT unit_positions[6];
         int null;
-        local int64 mods_start = FindFirst("0000000004000000,h", true, false, 0, 0.0, 1, start_pos+200);
-        FSeek(mods_start+4);
+        //local int64 mods_start = FindFirst("0000000004000000,h", true, false, 0, 0.0, 1, FTell());
+        //FSeek(mods_start+4);
         struct COMP_MODS_PROVIDED {
             int start <hidden=true>;
             int num_modifiers;
@@ -709,8 +792,8 @@ typedef struct {
         } all_company_modifiers;
         
         //FSeek(start_pos+371-51+119);
-        local int64 unit_start = FindFirst("00000000100,h", true, false, 0, 0.0, 1, start_pos+200);
-        FSeek(unit_start-1);
+        local int64 unit_start = FindFirst("0100000000000000,h", true, false, 0, 0.0, 1, FTell()-1, FTell()+50);
+        FSeek(unit_start+13);
         int num_units;
         struct UNIT {
             local int start_pos = FTell();
@@ -736,8 +819,10 @@ typedef struct {
             FSeek(start_pos+67-24);
             POSITION position <fgcolor=cBlue>;
             float floats[5];
-            MS current_speed <fgcolor=cBlue>;
-            FSeek(start_pos+121-8);
+            MS current_speed0 <fgcolor=cBlue>;
+            FSeek(FTell() + 22);
+            MS current_speed1 <fgcolor=cBlue>;
+            FSeek(FTell() + 16);
             struct MOD_GAINED {
                 int start <hidden=true>;
                 int size <fgcolor=0x3C8E38>;
@@ -809,7 +894,7 @@ typedef struct {
         
     } COMPANY;
     
-} MAP_OBJ <optimize=false,comment=Str("%s, %i %i", TYPE.objects[this.header.index].name, TYPE.objects[this.header.index].type, TYPE.objects[this.header.index].sub_type)>;
+} MAP_OBJ <optimize=false,comment=ObjComment>;
 
 string ObjStatusComment(ubyte &status) {
     switch(status) {
@@ -837,7 +922,7 @@ typedef struct {
     LittleEndian();
     local int start_pos = FTell();
     char unknown[4];
-    while (FTell() < (start_pos + chunk_length - 19)) {
+    while (FTell() < (start_pos + chunk_length - 4)) {
         MAP_OBJ obj;
     }
 } OBJS_CHUNK;
@@ -1187,12 +1272,13 @@ typedef struct {
     }
     
     FSeek(FTell()+98);  // Skips data I don't understand
-    local int ct_C = -1;
+    local int ct_C = 0;
     do {
         T_CONDITION conditions;
-    } while (conditions[++ct_C].next == 0x03);
+        ct_C++;
+    } while (ReadInt() != 0);
     
-    local int ct_E = conditions[ct_C].next;
+    local int ct_E = conditions[ct_C-1].next;
     if (ct_E > 0) {
         int padding <hidden=true>;
     }
@@ -1248,7 +1334,7 @@ while (!FEof()) {
         case "MMGR": MMGR_CHUNK MMGR; FSeek(start_pos + MMGR.chunk_length + 8); break;
         case "TYPE": TYPE_CHUNK TYPE; FSeek(start_pos + TYPE.chunk_length + 8); break;
         case "HROS": HROS_CHUNK HROS; FSeek(start_pos + HROS.chunk_length + 8); break;
-        //case "PLRS": PLRS_CHUNK PLRS; FSeek(start_pos + PLRS.chunk_length + 8); break;
+        case "PLRS": PLRS_CHUNK PLRS; FSeek(start_pos + PLRS.chunk_length + 8); break;
         case "OBJS": OBJS_CHUNK OBJS; FSeek(start_pos + OBJS.chunk_length + 8); break;
         case "TRGS": TRGS_CHUNK TRGS; FSeek(start_pos + TRGS.chunk_length + 8); break;
         
@@ -1264,4 +1350,11 @@ string TypeLookup(uint16 &index) {
         return "Empty";
     }
     return Str("%s",TYPE.objects[index].name);
+}
+
+string ObjComment(MAP_OBJ &o) {
+    if (o.header.index == 0xFFFF) {
+        return "Empty";
+    }
+    return Str("%s, %i %i", TYPE.objects[o.header.index].name, TYPE.objects[o.header.index].type, TYPE.objects[o.header.index].sub_type);
 }
